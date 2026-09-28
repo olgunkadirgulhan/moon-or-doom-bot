@@ -73,25 +73,25 @@ def _rsi(frames: dict) -> float:
     return sum(vals) / len(vals)
 
 
+MIN_TARGET_ATR = 0.5  # fiyata bundan yakın seviyeler hedef sayılmaz (gürültü)
+
+
 def _plan(side: str, price: float, supports: list, resistances: list, atr: float) -> dict:
-    """side='long' → destekten al; 'short' → dirençten sat."""
+    """Giriş her zaman güncel fiyat. long: SL en yakın desteğin altında, TP'ler üstteki dirençler; short tersi."""
+    entry = price
     if side == "long":
-        anchor = _nearest(supports, price, below=True)
-        level = anchor[0] if anchor else price - atr
-        entry = price if price - level < 0.3 * atr else level
-        sl = level - atr
-        targets = [l[0] for l in resistances if l[0] > entry]
-        tp1 = targets[0] if targets else entry + 2 * atr
-        tp2 = targets[1] if len(targets) > 1 else max(tp1 + atr, entry + 3.5 * atr)
+        below = [l[0] for l in supports if l[0] < price]
+        sl = (max(below) if below else price - 0.5 * atr) - atr
+        targets = [l[0] for l in resistances if l[0] > price + MIN_TARGET_ATR * atr]
+        tp1 = targets[0] if targets else price + 2 * atr
+        tp2 = targets[1] if len(targets) > 1 else max(tp1 + atr, price + 3.5 * atr)
         rr = (tp1 - entry) / (entry - sl)
     else:
-        anchor = _nearest(resistances, price, below=False)
-        level = anchor[0] if anchor else price + atr
-        entry = price if level - price < 0.3 * atr else level
-        sl = level + atr
-        targets = [l[0] for l in reversed(supports) if l[0] < entry]
-        tp1 = targets[0] if targets else entry - 2 * atr
-        tp2 = targets[1] if len(targets) > 1 else min(tp1 - atr, entry - 3.5 * atr)
+        above = [l[0] for l in resistances if l[0] > price]
+        sl = (min(above) if above else price + 0.5 * atr) + atr
+        targets = [l[0] for l in reversed(supports) if l[0] < price - MIN_TARGET_ATR * atr]
+        tp1 = targets[0] if targets else price - 2 * atr
+        tp2 = targets[1] if len(targets) > 1 else min(tp1 - atr, price - 3.5 * atr)
         rr = (entry - tp1) / (sl - entry)
     return {"entry": entry, "sl": sl, "tp1": tp1, "tp2": tp2, "rr": rr}
 

@@ -15,8 +15,8 @@ def caption(rank: int | None, r: dict) -> str:
     f = chart.fmt_price
     head = f"{rank}. " if rank else ""
     lines = [
-        f"{head}{ICON[r['signal']]} {r['symbol']} — {r['signal']} — Skor {r['score']:.0f}",
-        f"Fiyat {f(r['price'])} | Giriş {f(r['entry'])} | SL {f(r['sl'])}",
+        f"{head}{ICON[r['signal']]} {r['symbol']} — {r['signal']} ({chart.side_label(r)}) — Skor {r['score']:.0f}",
+        f"Giriş (güncel fiyat) {f(r['entry'])} | SL {f(r['sl'])}",
         f"TP1 {f(r['tp1'])} | TP2 {f(r['tp2'])} | R:R {r['rr']:.1f}" + (" ⚠️ R:R düşük" if r["rr_low"] else ""),
     ]
     oc = r.get("onchain", {})

@@ -63,6 +63,10 @@ def fmt_usd(v: float | None) -> str:
     return f"{sign}${a:.0f}"
 
 
+def side_label(r: dict) -> str:
+    return "LONG" if r["side"] == "long" else "SHORT"
+
+
 def _png(fig) -> bytes:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", facecolor=fig.get_facecolor())
@@ -147,7 +151,7 @@ def coin_chart(res: dict) -> bytes:
 
         color = {"AL": GREEN, "SAT": RED}.get(res["signal"], YELLOW)
         rr = f"R:R {res['rr']:.1f}" + ("  (R:R düşük!)" if res["rr_low"] else "")
-        fig.suptitle(f"{res['symbol']} — {res['signal']} — Skor {res['score']:.0f} — {rr}",
+        fig.suptitle(f"{res['symbol']} — {res['signal']} ({side_label(res)}) — Skor {res['score']:.0f} — {rr}",
                      color=color, fontsize=18, fontweight="bold")
         fig.text(0.97, 0.935, f"Fiyat {fmt_price(res['price'])}  ·  "
                  f"{datetime.now(TZ):%d.%m.%Y %H:%M}", color=TEXT, ha="right", fontsize=10)
@@ -155,12 +159,12 @@ def coin_chart(res: dict) -> bytes:
 
 
 def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Özeti") -> bytes:
-    headers = ["#", "Coin", "Sinyal", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R", "Netflow 24s"]
+    headers = ["#", "Coin", "Sinyal", "Yön", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R", "Netflow 24s"]
     rows = []
     for i, r in enumerate(results, 1):
         oc = r.get("onchain", {})
         rows.append([
-            str(i), r["symbol"], r["signal"], f"{r['score']:.0f}",
+            str(i), r["symbol"], r["signal"], side_label(r), f"{r['score']:.0f}",
             fmt_price(r["entry"]), fmt_price(r["sl"]), fmt_price(r["tp1"]), fmt_price(r["tp2"]),
             f"{r['rr']:.1f}" + (" ⚠" if r["rr_low"] else ""),
             fmt_usd(oc.get("netflow_24h")) if oc.get("available") else "—",
@@ -172,7 +176,7 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
         ax = fig.add_axes([0.01, 0.01, 0.98, 1 - 0.95 / height])
         ax.axis("off")
         tbl = ax.table(cellText=rows, colLabels=headers, loc="upper center", cellLoc="center",
-                       colWidths=[0.04, 0.09, 0.09, 0.07, 0.12, 0.12, 0.12, 0.12, 0.08, 0.13])
+                       colWidths=[0.04, 0.08, 0.08, 0.08, 0.06, 0.12, 0.12, 0.12, 0.12, 0.07, 0.11])
         tbl.auto_set_font_size(False)
         tbl.set_fontsize(12)
         tbl.scale(1, 1.9)
@@ -188,9 +192,11 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
             r = results[row - 1]
             if col == 2:
                 cell.set_text_props(color=sig_color[r["signal"]], fontweight="bold")
-            elif col == 8 and r["rr_low"]:
+            elif col == 3:
+                cell.set_text_props(color=GREEN if r["side"] == "long" else RED)
+            elif col == 9 and r["rr_low"]:
                 cell.set_text_props(color=ORANGE)
-            elif col == 9 and r.get("onchain", {}).get("available"):
+            elif col == 10 and r.get("onchain", {}).get("available"):
                 nf = r["onchain"].get("netflow_24h") or 0
                 cell.set_text_props(color=GREEN if nf >= 0 else RED)
         fig.text(0.5, 1 - 0.55 / height, f"{title}  ·  {datetime.now(TZ):%d.%m.%Y %H:%M} (İstanbul)",
