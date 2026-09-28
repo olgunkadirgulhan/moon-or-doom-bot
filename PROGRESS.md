@@ -7,3 +7,4 @@
 - Faz 4: bot/ main, handlers, auth, report, jobs (00/06/12/18 İstanbul + opsiyonel SL/TP uyarı). Duman testi geçti; gerçek token ile test edilmedi.
 - Faz 5: core/onchain.py (Etherscan V2, cüzdan başına tokentx, 7g günlük netflow, balina) + config yaml'ları. API key ile test edilmedi.
 - Faz 6: hata yönetimi, rate limit, Dockerfile, deploy/moon-or-doom.service, run.bat.
+- GitHub Actions: .github/workflows/report.yml + bot/oneshot.py, gunde 4 rapor (00/06/12/18 Istanbul). Binance verisi data-api.binance.vision uzerinden (ABD engeli yok). Komutlar sadece yerel bot.main acikken calisir.
