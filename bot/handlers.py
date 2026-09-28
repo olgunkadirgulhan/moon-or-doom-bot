@@ -12,14 +12,14 @@ from core import chart, data, db, onchain, scanner, settings
 
 HELP = (
     "🌕 Moon or Doom — kişisel sinyal botu\n\n"
-    "/scan — tüm listeyi tara: özet tablo + AL/SAT grafikleri\n"
+    "/scan — tüm listeyi tara: en güçlü 10 LONG + 10 SHORT tablosu\n"
     "/coin ETH — tek coin detay grafiği\n"
     "/list — izleme listesi\n"
     "/watch add PEPE · /watch rm PEPE — listeyi düzenle\n"
     "/settings — ayarları göster\n"
     "/settings <anahtar> <değer> — ayar değiştir\n"
     "   ör: buy_threshold 70 · min_rr 2 · report_hours 0,6,12,18\n"
-    "       weights.onchain 10 · alerts on · top_n 12\n\n"
+    "       weights.onchain 10 · alerts on · top_n 12 · charts on\n\n"
     "⚠️ Yatırım tavsiyesi değildir; bot emir göndermez."
 )
 
@@ -33,7 +33,7 @@ async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def scan_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = await update.message.reply_text("🔎 Taranıyor…")
     try:
-        await send_report(ctx.bot, update.effective_chat.id, only_signals=True, title="Manuel Tarama")
+        await send_report(ctx.bot, update.effective_chat.id, title="Manuel Tarama")
     except Exception as e:  # noqa: BLE001
         await update.message.reply_text(f"⚠️ Tarama başarısız: {e}")
     finally:

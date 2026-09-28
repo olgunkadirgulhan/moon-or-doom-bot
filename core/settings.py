@@ -10,8 +10,9 @@ DEFAULTS = {
     "rr_penalty": 10,
     "report_hours": [0, 6, 12, 18],
     "top_n": 10,
-    "universe_size": 30,
+    "universe_size": 40,
     "alerts": False,
+    "charts": False,
     "weights": {"trend": 25, "proximity": 25, "rsi": 15, "confluence": 15, "onchain": 20},
 }
 

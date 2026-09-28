@@ -119,32 +119,32 @@ def evaluate(symbol: str, frames: dict, levels_by_tf: dict, onchain: dict, cfg: 
     }
     w = cfg["weights"]
     total_w = sum(w.values()) or 1
-    score = 50 + 50 * sum(w[k] * v for k, v in components.items()) / total_w
+    raw = 50 + 50 * sum(w[k] * v for k, v in components.items()) / total_w
 
-    side = "long" if score >= 50 else "short"
-    plan = _plan(side, price, supports, resistances, atr)
-    rr_low = plan["rr"] < cfg["min_rr"]
-    if rr_low:
-        # düşük R:R → yönden bağımsız olarak kanaati 50'ye doğru zayıflat
-        pen = cfg["rr_penalty"]
-        score = max(50, score - pen) if side == "long" else min(50, score + pen)
-    score = round(_clip(score, 0, 100), 1)
-
-    if score >= cfg["buy_threshold"]:
-        signal = "AL"
-    elif score <= cfg["sell_threshold"]:
-        signal = "SAT"
-    else:
-        signal = "BEKLE"
-
-    return {
+    base = {
         "symbol": symbol,
         "price": price,
         "atr": atr,
-        "score": score,
-        "signal": signal,
-        "side": side,
-        "rr_low": rr_low,
+        "raw_score": raw,
         "components": {k: round(v, 2) for k, v in components.items()},
-        **{k: (v if math.isfinite(v) else 0.0) for k, v in plan.items()},
+        "plans": {s: _plan(s, price, supports, resistances, atr) for s in ("long", "short")},
     }
+    return with_side(base, "long" if raw >= 50 else "short", cfg)
+
+
+def with_side(res: dict, side: str, cfg: dict) -> dict:
+    """Sonucu verilen yönün planıyla doldurur; düşük R:R o yönün lehine olan skoru 10 puan zayıflatır."""
+    plan = {k: (v if math.isfinite(v) else 0.0) for k, v in res["plans"][side].items()}
+    rr_low = plan["rr"] < cfg["min_rr"]
+    score = res["raw_score"]
+    if rr_low:
+        score += -cfg["rr_penalty"] if side == "long" else cfg["rr_penalty"]
+    score = round(_clip(score, 0, 100), 1)
+
+    if side == "long" and score >= cfg["buy_threshold"]:
+        signal = "AL"
+    elif side == "short" and score <= cfg["sell_threshold"]:
+        signal = "SAT"
+    else:
+        signal = "BEKLE"
+    return {**res, **plan, "side": side, "score": score, "signal": signal, "rr_low": rr_low}

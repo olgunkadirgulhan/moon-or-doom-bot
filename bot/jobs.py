@@ -32,7 +32,7 @@ async def report_job(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if chat_id is None:
         return
     try:
-        await send_report(ctx.bot, chat_id, only_signals=False, title="Otomatik Rapor")
+        await send_report(ctx.bot, chat_id, title="Otomatik Rapor")
     except Exception as e:  # noqa: BLE001
         log.exception("rapor hatası")
         await ctx.bot.send_message(chat_id, f"⚠️ Otomatik rapor başarısız: {e}")

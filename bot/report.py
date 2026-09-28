@@ -4,7 +4,7 @@ import logging
 
 from telegram import Bot, InputMediaPhoto
 
-from core import chart, db, scanner
+from core import chart, db, scanner, settings
 
 log = logging.getLogger(__name__)
 ICON = {"AL": "🟢", "SAT": "🔴", "BEKLE": "🟡"}
@@ -39,25 +39,25 @@ async def send_charts(bot: Bot, chat_id: int, results: list[dict], ranks: list[i
             await bot.send_media_group(chat_id, chunk, write_timeout=SEND_TIMEOUT)
 
 
-async def send_report(bot: Bot, chat_id: int, only_signals: bool = False, title: str = "Sinyal Özeti") -> None:
-    """only_signals=True → /scan (sadece AL/SAT grafikleri), False → otomatik rapor (hepsi)."""
-    top, failed = await scanner.scan()
-    table = await asyncio.to_thread(chart.summary_table, top, f"Moon or Doom — {title}")
-    note = f"{len(top)} coin, skora göre azalan sıralı."
+async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> None:
+    """İki sıralama tablosu (LONG, SHORT); `charts` ayarı açıksa ardından AL/SAT grafikleri."""
+    longs, shorts, failed = await scanner.scan()
+    tables = [
+        (longs, f"🟢 LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · LONG"),
+        (shorts, f"🔴 SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", f"{title} · SHORT"),
+    ]
+    for rows, note, table_title in tables:
+        png = await asyncio.to_thread(chart.summary_table, rows, f"Moon or Doom — {table_title}")
+        await bot.send_photo(chat_id, png, caption=note, write_timeout=SEND_TIMEOUT)
     if failed:
-        note += f"\nVeri alınamadı: {', '.join(failed)}"
-    await bot.send_photo(chat_id, table, caption=note, write_timeout=SEND_TIMEOUT)
+        await bot.send_message(chat_id, f"Veri alınamadı: {', '.join(failed)}")
 
-    ranked = list(enumerate(top, 1))
-    if only_signals:
-        ranked = [(i, r) for i, r in ranked if r["signal"] != "BEKLE"]
-        if not ranked:
-            await bot.send_message(chat_id, "Şu an AL/SAT eşiğini geçen coin yok (hepsi BEKLE).")
-    if ranked:
-        await send_charts(bot, chat_id, [r for _, r in ranked], [i for i, _ in ranked])
+    actionable = [r for r in longs + shorts if r["signal"] != "BEKLE"]
+    if settings.get("charts") and actionable:
+        await send_charts(bot, chat_id, actionable)
 
     # raporlar arası SL/TP uyarıları için planları sakla
     db.kv_set("last_plans", [
         {k: r[k] for k in ("symbol", "signal", "side", "entry", "sl", "tp1", "tp2")} | {"hits": []}
-        for r in top if r["signal"] != "BEKLE"
+        for r in actionable
     ])

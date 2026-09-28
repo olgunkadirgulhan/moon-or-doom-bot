@@ -25,7 +25,7 @@ async def main() -> None:
         sys.exit("TELEGRAM_BOT_TOKEN ve ALLOWED_CHAT_ID gerekli.")
     try:
         async with Bot(token) as bot:
-            await send_report(bot, chat_id, only_signals=False, title="Otomatik Rapor")
+            await send_report(bot, chat_id, title="Otomatik Rapor")
     finally:
         await data.close()
 

@@ -21,11 +21,12 @@ async def main(symbol: str) -> None:
         print("bileşenler:", res["components"], "| on-chain:", res["onchain"].get("reason") or res["onchain"]["score"])
 
         t0 = time.time()
-        top, failed = await scanner.scan()
-        (ROOT / "data" / "test_table.png").write_bytes(chart.summary_table(top))
-        print(f"tarama {time.time() - t0:.1f}s, {len(top)} coin, hata: {failed}")
-        for r in top:
-            print(f"  {r['symbol']:6} {r['signal']:5} {r['score']:5.1f}  rr={r['rr']:.2f}{' ⚠' if r['rr_low'] else ''}")
+        longs, shorts, failed = await scanner.scan()
+        (ROOT / "data" / "test_table_long.png").write_bytes(chart.summary_table(longs, "LONG"))
+        (ROOT / "data" / "test_table_short.png").write_bytes(chart.summary_table(shorts, "SHORT"))
+        print(f"tarama {time.time() - t0:.1f}s, {len(longs)} long + {len(shorts)} short, hata: {failed}")
+        for r in longs + shorts:
+            print(f"  {r['symbol']:6} {r['side']:5} {r['signal']:5} {r['score']:5.1f}  rr={r['rr']:.2f}{' ⚠' if r['rr_low'] else ''}")
     finally:
         await data.close()
 

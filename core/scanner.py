@@ -7,6 +7,11 @@ from core.indicators import add_indicators, last_atr
 
 log = logging.getLogger(__name__)
 _scan_lock = asyncio.Lock()
+MIN_BARS = 60  # yeni listelenen coinlerde seviye/EMA hesabı anlamsız
+
+
+class InsufficientData(Exception):
+    pass
 
 
 def _normalize(symbol: str) -> str:
@@ -49,6 +54,9 @@ async def analyze(symbol: str, cfg: dict | None = None) -> dict:
     symbol = _normalize(symbol)
     cfg = cfg or settings.all_settings()
     raw = await data.fetch_all_tf(symbol)
+    short_tf = [tf for tf, df in raw.items() if len(df) < MIN_BARS]
+    if short_tf:
+        raise InsufficientData(f"{symbol}: {', '.join(short_tf)} için yetersiz mum geçmişi")
     frames = {tf: add_indicators(df) for tf, df in raw.items()}
     price = float(frames["1h"]["Close"].iloc[-1])
     lv = {tf: levels.compute_levels(df, tf, price) for tf, df in frames.items()}
@@ -61,8 +69,8 @@ async def analyze(symbol: str, cfg: dict | None = None) -> dict:
     return res
 
 
-async def scan() -> tuple[list[dict], list[str]]:
-    """(skora göre azalan ilk top_n sonuç, hata alan coinler)."""
+async def scan() -> tuple[list[dict], list[dict], list[str]]:
+    """(en güçlü top_n LONG, en güçlü top_n SHORT, hata alan coinler)."""
     async with _scan_lock:
         cfg = settings.all_settings()
         symbols = await universe()
@@ -75,13 +83,20 @@ async def scan() -> tuple[list[dict], list[str]]:
         outcomes = await asyncio.gather(*(one(s) for s in symbols), return_exceptions=True)
         results, failed = [], []
         for sym, out in zip(symbols, outcomes):
-            if isinstance(out, Exception):
+            if isinstance(out, InsufficientData):
+                log.info("atlandı: %s", out)
+            elif isinstance(out, Exception):
                 log.warning("analiz hatası %s: %s", sym, out)
                 failed.append(sym)
             else:
                 results.append(out)
 
-        results.sort(key=lambda r: r["score"], reverse=True)
-        top = results[: max(cfg["top_n"], 10)]
-        db.save_signals(top)
-        return top, failed
+        n = max(cfg["top_n"], 10)
+        # LONG: long planıyla skoru en yüksek n coin; SHORT: kalanlardan short planıyla skoru en düşük n coin
+        longs = sorted((signal.with_side(r, "long", cfg) for r in results),
+                       key=lambda r: r["score"], reverse=True)[:n]
+        taken = {r["symbol"] for r in longs}
+        shorts = sorted((signal.with_side(r, "short", cfg) for r in results if r["symbol"] not in taken),
+                        key=lambda r: r["score"])[:n]
+        db.save_signals(longs + shorts)
+        return longs, shorts, failed
