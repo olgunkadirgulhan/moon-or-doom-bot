@@ -1,0 +1,15 @@
+# /etc/systemd/system/moon-or-doom.service
+# sudo systemctl enable --now moon-or-doom
+[Unit]
+Description=Moon or Doom Telegram sinyal botu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/moon-or-doom
+ExecStart=/opt/moon-or-doom/.venv/bin/python -m bot.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

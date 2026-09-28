@@ -1,0 +1,68 @@
+"""Çalışma zamanı ayarları: varsayılanlar + /settings ile SQLite'a yazılan değişiklikler."""
+import copy
+
+from core import db
+
+DEFAULTS = {
+    "buy_threshold": 65,
+    "sell_threshold": 35,
+    "min_rr": 1.5,
+    "rr_penalty": 10,
+    "report_hours": [0, 6, 12, 18],
+    "top_n": 10,
+    "universe_size": 30,
+    "alerts": False,
+    "weights": {"trend": 25, "proximity": 25, "rsi": 15, "confluence": 15, "onchain": 20},
+}
+
+
+def all_settings() -> dict:
+    merged = copy.deepcopy(DEFAULTS)
+    stored = db.kv_get("settings", {})
+    for k, v in stored.items():
+        if k == "weights":
+            merged["weights"].update(v)
+        elif k in merged:
+            merged[k] = v
+    return merged
+
+
+def get(key: str):
+    return all_settings()[key]
+
+
+def _parse(default, raw: str):
+    if isinstance(default, bool):
+        if raw.lower() in ("1", "true", "on", "acik", "açık", "evet"):
+            return True
+        if raw.lower() in ("0", "false", "off", "kapali", "kapalı", "hayir", "hayır"):
+            return False
+        raise ValueError("on/off bekleniyor")
+    if isinstance(default, int):
+        return int(raw)
+    if isinstance(default, float):
+        return float(raw)
+    if isinstance(default, list):
+        return sorted({int(x) for x in raw.replace(" ", "").split(",") if x})
+    raise ValueError("desteklenmeyen tip")
+
+
+def set_value(key: str, raw: str) -> None:
+    """`key` düz anahtar veya `weights.trend` gibi noktalı olabilir."""
+    stored = db.kv_get("settings", {})
+    if key.startswith("weights."):
+        sub = key.split(".", 1)[1]
+        if sub not in DEFAULTS["weights"]:
+            raise KeyError(key)
+        stored.setdefault("weights", {})[sub] = int(raw)
+    else:
+        if key not in DEFAULTS or key == "weights":
+            raise KeyError(key)
+        value = _parse(DEFAULTS[key], raw)
+        if key == "report_hours":
+            if len(value) < 4 or any(not 0 <= h <= 23 for h in value):
+                raise ValueError("en az 4 saat, 0-23 arası")
+        if key == "top_n" and value < 10:
+            raise ValueError("top_n en az 10")
+        stored[key] = value
+    db.kv_set("settings", stored)

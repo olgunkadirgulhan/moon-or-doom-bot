@@ -1,0 +1,30 @@
+# Borsa cüzdan etiketleri (chainid → borsa → adresler).
+# Kaynak/genişletme: github.com/brianleect/etherscan-labels — sadece büyük borsalar.
+# Adres ne kadar çoksa netflow o kadar doğru, ama her adres token başına 1 API çağrısı demek.
+
+1:
+  Binance:
+    - "0x28C6c06298d514Db089934071355E5743bf21d60"  # Binance 14
+    - "0x21a31Ee1afC51d94C2eFcCAa2092aD1028285549"  # Binance 15
+    - "0xDFd5293D8e347dFe59E90eFd55b2956a1343963d"  # Binance 16
+    - "0x3f5CE5FBFe3E9af3971dD833D26bA9b5C936f0bE"  # Binance 1
+    - "0xF977814e90dA44bFA03b6295A0616a897441aceC"  # Binance 8
+  Coinbase:
+    - "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3"  # Coinbase 1
+    - "0x503828976D22510aad0201ac7EC88293211D23Da"  # Coinbase 2
+    - "0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43"  # Coinbase 10
+  OKX:
+    - "0x6cC5F688a315f3dC28A7781717a9A798a59fDA7b"
+  Bybit:
+    - "0xf89d7b9c864f589bbF53a82105107622B35EaA40"
+  Kraken:
+    - "0x2910543Af39abA0Cd09dBb2D50200b3E800A63D2"  # Kraken 1
+    - "0x267be1C1D684F78cb4F6a176C4911b741E4Ffdc0"  # Kraken 4
+
+56:
+  Binance:
+    - "0x8894E0a0c962CB723c1976a4421c95949bE2D4E3"
+    - "0xF977814e90dA44bFA03b6295A0616a897441aceC"
+
+# Arbitrum (42161), Optimism (10), Base (8453), Polygon (137) için adresleri
+# etherscan-labels'tan doğrulayarak ekle; boşken o zincirdeki tokenlar "on-chain yok" gösterir.

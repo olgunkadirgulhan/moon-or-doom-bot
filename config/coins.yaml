@@ -1,0 +1,23 @@
+# İzleme listesine her zaman eklenen coinler (Binance'teki 24s hacim ilk 30'a ek olarak).
+# on-chain analizi için EVM token kontrat adresi + chainid gerekir.
+# chainid: 1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum, 8453=Base, 10=Optimism
+# Kontrat yoksa (BTC, SOL, ETH native vb.) on-chain adımı atlanır → skor 0.
+
+manual: [BTC, ETH, SOL, LINK, PEPE]
+
+tokens:
+  LINK:  {chainid: 1, contract: "0x514910771AF9Ca656af840dff83E8264EcF986CA"}
+  UNI:   {chainid: 1, contract: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"}
+  PEPE:  {chainid: 1, contract: "0x6982508145454Ce325dDbE47a25d4ec3d2311933"}
+  SHIB:  {chainid: 1, contract: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE"}
+  AAVE:  {chainid: 1, contract: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9"}
+  LDO:   {chainid: 1, contract: "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"}
+  ENA:   {chainid: 1, contract: "0x57e114B691Db790C35207b2e685D4A43181e6061"}
+  FET:   {chainid: 1, contract: "0xaea46A60368A7bD060eec7DF8CBa43b7EF41Ad85"}
+  ONDO:  {chainid: 1, contract: "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3"}
+  WLD:   {chainid: 1, contract: "0x163f8C2467924be0ae7B5347228CABF260318753"}
+  FLOKI: {chainid: 1, contract: "0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E"}
+  POL:   {chainid: 1, contract: "0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6"}
+  ARB:   {chainid: 42161, contract: "0x912CE59144191C1204E64559FE8253a0e49E6548"}
+  OP:    {chainid: 10, contract: "0x4200000000000000000000000000000000000042"}
+  CAKE:  {chainid: 56, contract: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"}

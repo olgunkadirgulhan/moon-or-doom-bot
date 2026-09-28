@@ -1,0 +1,25 @@
+name: Otomatik rapor
+
+on:
+  schedule:
+    # UTC saatleri → İstanbul (UTC+3): 00:00, 06:00, 12:00, 18:00
+    - cron: "0 21,3,9,15 * * *"
+  workflow_dispatch: {}  # Actions sekmesinden elle çalıştırma
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m bot.oneshot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_CHAT_ID: ${{ secrets.ALLOWED_CHAT_ID }}
+          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+          EXCHANGE: binance
