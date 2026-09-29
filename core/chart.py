@@ -173,8 +173,8 @@ def trade_pnl(r: dict, price: float, margin: float, leverage: float) -> float:
 
 
 def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Özeti",
-                  margin: float = 1000, leverage: float = 10) -> bytes:
-    headers = ["#", "Coin", "Sinyal", "Yön", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R", "Netflow 24s",
+                  margin: float = 1000, leverage: float = 10, asset_label: str = "Coin") -> bytes:
+    headers = ["#", asset_label, "Sinyal", "Yön", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R", "Netflow 24s",
                "TP1 kâr", "TP2 kâr", "SL zarar"]
     liq_loss = -margin * LIQ_BUFFER
     rows, liquidated = [], []
@@ -184,7 +184,7 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
         liq = sl_loss <= liq_loss
         liquidated.append(liq)
         rows.append([
-            str(i), r["symbol"], r["signal"], side_label(r), f"{r['score']:.0f}",
+            str(i), r.get("name") or r["symbol"], r["signal"], side_label(r), f"{r['score']:.0f}",
             fmt_price(r["entry"]), fmt_price(r["sl"]), fmt_price(r["tp1"]), fmt_price(r["tp2"]),
             f"{r['rr']:.1f}" + (" ⚠" if r["rr_low"] else ""),
             fmt_usd(oc.get("netflow_24h")) if oc.get("available") else "—",
@@ -199,9 +199,11 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
         fig = plt.figure(figsize=(20, height), dpi=100, facecolor=BG)
         ax = fig.add_axes([0.01, footer_h / height, 0.98, 1 - (0.95 + footer_h) / height])
         ax.axis("off")
+        widths = [0.03, max(0.06, 0.0072 * max((len(r[1]) for r in rows), default=0)),
+                  0.06, 0.06, 0.045, 0.1, 0.1, 0.1, 0.1, 0.055, 0.08, 0.07, 0.07, 0.1]
+        widths = [w / sum(widths) for w in widths]  # uzun isimlerde tablo taşmasın
         tbl = ax.table(cellText=rows, colLabels=headers, loc="upper center", cellLoc="center",
-                       colWidths=[0.03, 0.06, 0.06, 0.06, 0.045, 0.1, 0.1, 0.1, 0.1, 0.055, 0.08,
-                                  0.07, 0.07, 0.1])
+                       colWidths=widths)
         tbl.auto_set_font_size(False)
         tbl.set_fontsize(12)
         tbl.scale(1, 1.9)
@@ -323,17 +325,18 @@ def result_chart(summary: dict, title: str) -> bytes:
             mark = "✓" if i["outcome"] == "TP" else "✗"
             t = datetime.fromtimestamp(i["ts"], TZ).strftime("%d.%m %H:%M")
             tp2 = " (TP2)" if i["tp2_hit"] else ""
-            return f"{mark} {i['symbol']:<6} {i['side'].upper():<5} {t} {i['pnl']:+.1f}%{tp2}"
+            name = i.get("name", i["symbol"]).replace("₺", "TL")  # monospace yazı tipinde ₺ yok
+            return f"{mark} {name:<13} {i['side'].upper():<5} {t} {i['pnl']:+.1f}%{tp2}"
 
         ax.text(0.0, 1.0, "En iyi sonuçlar", color=GREEN, fontsize=13, fontweight="bold", va="top")
-        ax.text(0.0, 0.9, "\n".join(map(line, best)) or "—", color=TEXT, fontsize=11,
+        ax.text(0.0, 0.9, "\n".join(map(line, best)) or "—", color=TEXT, fontsize=9.5,
                 va="top", family="monospace")
         ax.text(0.52, 1.0, "En kötü sonuçlar", color=RED, fontsize=13, fontweight="bold", va="top")
-        ax.text(0.52, 0.9, "\n".join(map(line, worst)) or "—", color=TEXT, fontsize=11,
+        ax.text(0.52, 0.9, "\n".join(map(line, worst)) or "—", color=TEXT, fontsize=9.5,
                 va="top", family="monospace")
 
         fig.suptitle(title, color=TEXT, fontsize=20, fontweight="bold")
-        fig.text(0.5, 0.925, f"{o['total']} tahmin · {summary['coins']} farklı coin · her tahmin 24 saat "
+        fig.text(0.5, 0.925, f"{o['total']} tahmin · {summary['coins']} farklı varlık · her tahmin 24 saat "
                  "izlendi: önce TP1 ✓, önce SL ✗, hiçbiri açık",
                  color=TEXT, ha="center", fontsize=11)
         return _png(fig)

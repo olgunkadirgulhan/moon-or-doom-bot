@@ -64,15 +64,45 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
         for r in actionable
     ])
 
+    # kripto dışı piyasalar ayrı albüm; hata olursa kripto raporunu bozmasın
+    try:
+        await send_tradfi(bot, chat_id, title)
+    except Exception as e:  # noqa: BLE001
+        log.exception("altın/gümüş/BIST raporu hatası")
+        await bot.send_message(chat_id, f"⚠️ Altın/Gümüş/BIST tablosu alınamadı: {e}")
+
+
+async def send_tradfi(bot: Bot, chat_id: int, title: str) -> None:
+    """Altın/gümüş/endeks sabit listesi + BIST100 en iyi LONG ve SHORT — 3 tablo tek albüm."""
+    fixed, longs, shorts, failed = await scanner.scan_tradfi()
+    tracker.record(fixed + longs + shorts)
+    margin, lev = settings.get("margin_usd"), settings.get("leverage")
+    tables = [
+        (fixed, f"🥇 Altın · Gümüş · Endeks — {title}", "Altın · Gümüş · Endeks"),
+        (longs, f"🟢 BIST100 LONG — en güçlü {len(longs)}", "BIST100 · LONG"),
+        (shorts, f"🔴 BIST100 SHORT — en güçlü {len(shorts)}", "BIST100 · SHORT"),
+    ]
+    media = []
+    for rows, note, table_title in tables:
+        if not rows:
+            continue
+        png = await asyncio.to_thread(chart.summary_table, rows, f"Moon or Doom — {table_title}", margin, lev, "Varlık")
+        media.append(InputMediaPhoto(png, caption=note))
+    if media:
+        await bot.send_media_group(chat_id, media, write_timeout=SEND_TIMEOUT)
+    if failed:
+        await bot.send_message(chat_id, f"Veri alınamadı: {', '.join(failed)}")
+
 
 async def send_result(bot: Bot, chat_id: int, period: str) -> None:
-    """period='weekly' (son 7 gün) veya 'monthly' (ayın başından bugüne) isabet grafiği."""
+    """period: daily/weekly/monthly/3m/6m/9m/12m isabet grafiği; özet tracking/results.csv'ye kaydedilir."""
     since, until, title = tracker.period_bounds(period)
     summary = await tracker.evaluate(since, until)
     o = summary["overall"]
     if not o["total"]:
         await bot.send_message(chat_id, f"📊 {title}: bu dönemde kayıtlı tahmin yok.")
         return
+    tracker.save_result(period, title, summary)
     png = await asyncio.to_thread(chart.result_chart, summary, title)
     acc = "—" if o["accuracy"] is None else f"%{o['accuracy']:.0f}"
     note = (f"📊 {title}\n{o['total']} tahmin → ✓ {o['tp']} hedef, ✗ {o['sl']} stop, "

@@ -1,0 +1,24 @@
+# Kripto dışı piyasalar (Yahoo Finance). Veriler ~15 dk gecikmeli olabilir.
+# Altın/gümüş: COMEX vadeli (GC=F, SI=F) bazlı; spot fiyattan %0.5 civarı sapabilir.
+# Gram = ons / 31.1035; TL karşılığı USDTRY=X ile çarpılır.
+
+fixed:  # her raporda mutlaka yer alır, bu sırayla
+  ALTIN_GR_TL:  {name: "Gram Altın ₺",  ticker: "GC=F", div: 31.1034768, fx: "USDTRY=X"}
+  GUMUS_GR_TL:  {name: "Gram Gümüş ₺",  ticker: "SI=F", div: 31.1034768, fx: "USDTRY=X"}
+  ALTIN_GR_USD: {name: "Gram Altın $",  ticker: "GC=F", div: 31.1034768}
+  GUMUS_GR_USD: {name: "Gram Gümüş $",  ticker: "SI=F", div: 31.1034768}
+  ALTIN_ONS:    {name: "Altın Ons $",   ticker: "GC=F"}
+  BIST100:      {name: "BIST 100",      ticker: "XU100.IS"}
+  BIST30:       {name: "BIST 30",       ticker: "XU030.IS"}
+
+# BIST 100 bileşenleri (endeks 3 ayda bir güncellenir; Yahoo'da bulunamayanlar otomatik atlanır)
+bist100: [
+  AEFES, AGHOL, AGROT, AHGAZ, AKBNK, AKFYE, AKSA, AKSEN, ALARK, ALFAS, ALTNY, ANSGR, ARCLK, ARDYZ,
+  ASELS, ASTOR, BERA, BIMAS, BINHO, BRSAN, BRYAT, BSOKE, BTCIM, CANTE, CCOLA, CIMSA, CLEBI, CVKMD,
+  CWENE, DOAS, DOHOL, DSTKF, ECILC, EGEEN, EKGYO, ENERY, ENJSA, ENKAI, EREGL, EUPWR, FENER,
+  FROTO, GARAN, GESAN, GLRMK, GOLTS, GRSEL, GRTHO, GSRAY, GUBRF, HALKB, HEKTS, IEYHO, ISCTR, ISMEN,
+  KARSN, KCAER, KCHOL, KONTR, KONYA, TRMET, TRALT, KRDMD, KTLEV, LMKDC, MAGEN, MAVI, MGROS, MIATK,
+  MPARK, OBAMS, ODAS, OTKAR, OYAKC, PASEU, PETKM, PGSUS, REEDR, RYGYO, SAHOL, SASA, SELEC, SISE,
+  SKBNK, SMRTG, SOKM, TABGD, TAVHL, TCELL, THYAO, TKFEN, TOASO, TSKB, TTKOM, TTRAK, TUKAS, TUPRS,
+  TURSG, ULKER, VAKBN, VESTL, YEOTK, YKBNK, ZOREN,
+]

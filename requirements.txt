@@ -10,3 +10,4 @@ APScheduler>=3.10,<4
 python-dotenv>=1.0
 PyYAML>=6.0
 tzdata  # Windows'ta zoneinfo için
+yfinance>=0.2.50  # altın/gümüş/BIST
