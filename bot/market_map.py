@@ -38,16 +38,25 @@ def key_levels(res: dict, n: int = 3) -> tuple[list[dict], list[dict]]:
     levels = [{"price": sum(p for p, _, _ in g) / len(g), "tfs": sorted({tf for _, _, tf in g}, key=TF_ORDER.index),
                "strength": max(s for _, s, _ in g)} for g in groups]
     for lv in levels:
-        lv["strong"] = len(lv["tfs"]) >= 2 or lv["strength"] >= 70
-    sup = sorted((lv for lv in levels if lv["price"] < price), key=lambda lv: -lv["price"])[:n]
-    res_ = sorted((lv for lv in levels if lv["price"] > price), key=lambda lv: lv["price"])[:n]
+        lv["strong"] = len(lv["tfs"]) >= 2  # birden çok zaman diliminde görülen seviye
+
+    def pick(side: list[dict]) -> list[dict]:
+        near = side[:n]
+        major = next((lv for lv in side if lv["strong"]), None)
+        if major and not any(lv["strong"] for lv in near):
+            near = near + [{**major, "major": True}]  # yakınlarda güçlü yoksa en yakın ana seviyeyi ekle
+        return near
+
+    sup = pick(sorted((lv for lv in levels if lv["price"] < price), key=lambda lv: -lv["price"]))
+    res_ = pick(sorted((lv for lv in levels if lv["price"] > price), key=lambda lv: lv["price"]))
     return sup, res_
 
 
 def _level_text(lv: dict, price: float, u: str) -> str:
     pct = f"{100 * (lv['price'] / price - 1):+.1f}%".replace(".", ",")
     tfs = "+".join(TF_TR[t] for t in lv["tfs"])
-    return f"{chart.fmt_price_tr(lv['price'])}{u} ({pct} · {tfs}" + (", güçlü" if lv["strong"] else "") + ")"
+    text = f"{chart.fmt_price_tr(lv['price'])}{u} ({pct} · {tfs}" + (", güçlü" if lv["strong"] else "") + ")"
+    return f"<b>ana seviye {text}</b>" if lv.get("major") else text
 
 
 def _why_not(r: dict, cfg: dict, regs: dict, active_keys: set) -> str:
