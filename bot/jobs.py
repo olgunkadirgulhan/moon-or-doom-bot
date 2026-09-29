@@ -1,4 +1,5 @@
-"""Zamanlanmış işler: günde ≥4 rapor (İstanbul saati) ve opsiyonel SL/TP uyarıları."""
+"""Zamanlanmış işler (İstanbul saati): 2 saatte bir rapor, cumartesi 20:00 haftalık ve
+ayın son günü 20:00 aylık isabet sonucu, opsiyonel SL/TP uyarıları."""
 import logging
 from datetime import time
 from zoneinfo import ZoneInfo
@@ -6,7 +7,7 @@ from zoneinfo import ZoneInfo
 from telegram.ext import Application, ContextTypes
 
 from bot.auth import allowed_chat_id
-from bot.report import send_report
+from bot.report import send_report, send_result
 from core import chart, data, db, settings
 
 log = logging.getLogger(__name__)
@@ -21,6 +22,12 @@ def schedule_reports(app: Application) -> list[int]:
     hours = settings.get("report_hours")
     for h in hours:
         jq.run_daily(report_job, time(hour=h, tzinfo=TZ), name="report")
+    at = time(hour=settings.get("result_hour"), tzinfo=TZ)
+    if not jq.get_jobs_by_name("weekly"):
+        # PTB: 0=Pazar … 6=Cumartesi
+        jq.run_daily(result_job, at, days=(6,), name="weekly", data="weekly")
+    if not jq.get_jobs_by_name("monthly"):
+        jq.run_monthly(result_job, at, day=-1, name="monthly", data="monthly")
     if not jq.get_jobs_by_name("alerts"):
         jq.run_repeating(alert_job, interval=ALERT_INTERVAL, first=60, name="alerts")
     log.info("Rapor saatleri (İstanbul): %s", hours)
@@ -36,6 +43,17 @@ async def report_job(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:  # noqa: BLE001
         log.exception("rapor hatası")
         await ctx.bot.send_message(chat_id, f"⚠️ Otomatik rapor başarısız: {e}")
+
+
+async def result_job(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = allowed_chat_id()
+    if chat_id is None:
+        return
+    try:
+        await send_result(ctx.bot, chat_id, ctx.job.data)
+    except Exception as e:  # noqa: BLE001
+        log.exception("sonuç raporu hatası")
+        await ctx.bot.send_message(chat_id, f"⚠️ {ctx.job.data} sonuç raporu başarısız: {e}")
 
 
 def _hit(plan: dict, price: float) -> str | None:

@@ -2,14 +2,38 @@ name: Otomatik rapor
 
 on:
   schedule:
-    # UTC saatleri → İstanbul (UTC+3): 00:00, 06:00, 12:00, 18:00
-    - cron: "0 21,3,9,15 * * *"
-  workflow_dispatch: {}  # Actions sekmesinden elle çalıştırma
+    # UTC çift saatler → İstanbul (UTC+3): 03, 05, 07, ... 23, 01
+    - cron: "0 */2 * * *"
+    # Cumartesi 17:00 UTC → İstanbul 20:00: haftalık isabet sonucu
+    - cron: "0 17 * * 6"
+    # Ayın 28-31'i 17:00 UTC → betik sadece ayın son günüyse aylık sonucu gönderir
+    - cron: "0 17 28-31 * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "report = sıralama tabloları, weekly = haftalık sonuç, monthly = aylık sonuç"
+        type: choice
+        options: [report, weekly, monthly]
+        default: report
+
+permissions:
+  contents: write  # tracking/*.csv dosyalarını repoya kaydetmek için
+
+concurrency:
+  group: tracking  # iki çalışma aynı anda tahmin dosyasına yazmasın
+  cancel-in-progress: false
 
 jobs:
-  report:
+  run:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      MODE: >-
+        ${{ github.event.inputs.mode
+            || (github.event.schedule == '0 17 * * 6' && 'weekly')
+            || (github.event.schedule == '0 17 28-31 * *' && 'monthly')
+            || 'report' }}
+      FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,9 +41,19 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -q -r requirements.txt
-      - run: python -m bot.oneshot
+      - run: python -m bot.oneshot "$MODE"
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_CHAT_ID: ${{ secrets.ALLOWED_CHAT_ID }}
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
           EXCHANGE: binance
+      - name: Tahmin kayıtlarını repoya yaz
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tracking/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -q -m "tracking: $MODE $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull -q --rebase && git push -q && exit 0; sleep 5; done
+          exit 1

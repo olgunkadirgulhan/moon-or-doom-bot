@@ -4,7 +4,7 @@ import logging
 
 from telegram import Bot, InputMediaPhoto
 
-from core import chart, db, scanner, settings
+from core import chart, db, scanner, settings, tracker
 
 log = logging.getLogger(__name__)
 ICON = {"AL": "🟢", "SAT": "🔴", "BEKLE": "🟡"}
@@ -42,6 +42,7 @@ async def send_charts(bot: Bot, chat_id: int, results: list[dict], ranks: list[i
 async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> None:
     """İki sıralama tablosu (LONG, SHORT); `charts` ayarı açıksa ardından AL/SAT grafikleri."""
     longs, shorts, failed = await scanner.scan()
+    tracker.record(longs + shorts)
     tables = [
         (longs, f"🟢 LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · LONG"),
         (shorts, f"🔴 SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", f"{title} · SHORT"),
@@ -56,8 +57,23 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     if settings.get("charts") and actionable:
         await send_charts(bot, chat_id, actionable)
 
-    # raporlar arası SL/TP uyarıları için planları sakla
+    # raporlar arası SL/TP uyarıları için planları sakla (yerel bot)
     db.kv_set("last_plans", [
         {k: r[k] for k in ("symbol", "signal", "side", "entry", "sl", "tp1", "tp2")} | {"hits": []}
         for r in actionable
     ])
+
+
+async def send_result(bot: Bot, chat_id: int, period: str) -> None:
+    """period='weekly' (son 7 gün) veya 'monthly' (ayın başından bugüne) isabet grafiği."""
+    since, until, title = tracker.period_bounds(period)
+    summary = await tracker.evaluate(since, until)
+    o = summary["overall"]
+    if not o["total"]:
+        await bot.send_message(chat_id, f"📊 {title}: bu dönemde kayıtlı tahmin yok.")
+        return
+    png = await asyncio.to_thread(chart.result_chart, summary, title)
+    acc = "—" if o["accuracy"] is None else f"%{o['accuracy']:.0f}"
+    note = (f"📊 {title}\n{o['total']} tahmin → ✓ {o['tp']} hedef, ✗ {o['sl']} stop, "
+            f"○ {o['open']} açık. Doğruluk {acc}")
+    await bot.send_photo(chat_id, png, caption=note, write_timeout=SEND_TIMEOUT)

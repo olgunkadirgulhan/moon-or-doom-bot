@@ -202,3 +202,94 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
         fig.text(0.5, 1 - 0.55 / height, f"{title}  ·  {datetime.now(TZ):%d.%m.%Y %H:%M} (İstanbul)",
                  color=TEXT, ha="center", va="center", fontsize=15, fontweight="bold")
         return _png(fig)
+
+
+def _style_ax(ax) -> None:
+    ax.set_facecolor(PANEL)
+    ax.tick_params(colors=TEXT)
+    for s in ax.spines.values():
+        s.set_color(GRID)
+
+
+def _acc_text(s: dict) -> str:
+    return "—" if s["accuracy"] is None else f"%{s['accuracy']:.0f}"
+
+
+def result_chart(summary: dict, title: str) -> bytes:
+    """Dönem isabeti: genel pasta, grup bazlı çubuklar, gün gün doğruluk çizgisi, en iyi/kötü tahminler."""
+    o = summary["overall"]
+    with _lock:
+        fig = plt.figure(figsize=(16, 11), dpi=100, facecolor=BG)
+        gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.5], hspace=0.35, wspace=0.2,
+                              left=0.05, right=0.97, top=0.88, bottom=0.06)
+
+        # 1) genel dağılım
+        ax = fig.add_subplot(gs[0, 0])
+        ax.set_facecolor(BG)
+        vals = [o["tp"], o["sl"], o["open"]]
+        if sum(vals):
+            ax.pie(vals, colors=[GREEN, RED, "#607d8b"], startangle=90, counterclock=False,
+                   wedgeprops={"width": 0.35, "edgecolor": BG})
+        ax.text(0, 0.1, _acc_text(o), color=TEXT, ha="center", va="center", fontsize=30, fontweight="bold")
+        ax.text(0, -0.2, "doğruluk", color=TEXT, ha="center", va="center", fontsize=11)
+        ax.set_title(f"✓ Hedef {o['tp']}   ✗ Stop {o['sl']}   ○ Açık {o['open']}",
+                     color=TEXT, fontsize=13)
+
+        # 2) gruplar
+        ax = fig.add_subplot(gs[0, 1])
+        _style_ax(ax)
+        names = list(summary["groups"])
+        g = [summary["groups"][n] for n in names]
+        y = range(len(names))[::-1]
+        tp = [s["tp"] for s in g]
+        sl = [s["sl"] for s in g]
+        op = [s["open"] for s in g]
+        ax.barh(y, tp, color=GREEN, label="Hedef (TP1)")
+        ax.barh(y, sl, left=tp, color=RED, label="Stop (SL)")
+        ax.barh(y, op, left=[a + b for a, b in zip(tp, sl)], color="#607d8b", label="Açık")
+        ax.set_yticks(list(y), names, color=TEXT, fontsize=11)
+        for yi, s in zip(y, g):
+            ax.text(s["total"], yi, f"  {_acc_text(s)}  ({s['tp']}/{s['tp'] + s['sl']})",
+                    color=TEXT, va="center", fontsize=11)
+        ax.set_xlim(0, max([s["total"] for s in g] + [1]) * 1.3)
+        ax.legend(facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT, loc="lower right")
+        ax.set_title("Gruplara göre sonuç (doğruluk = hedef ÷ (hedef + stop))", color=TEXT, fontsize=12, loc="left")
+
+        # 3) gün gün doğruluk
+        ax = fig.add_subplot(gs[1, 0])
+        _style_ax(ax)
+        days = [(d, s) for d, s in summary["by_day"] if s["accuracy"] is not None]
+        if days:
+            ax.plot([d for d, _ in days], [s["accuracy"] for _, s in days], color=BLUE, marker="o")
+            ax.axhline(50, color=GRID, ls="--", lw=1)
+            ax.set_ylim(0, 100)
+            ax.tick_params(axis="x", labelrotation=45)
+        else:
+            ax.text(0.5, 0.5, "Henüz sonuçlanan tahmin yok", color=TEXT, ha="center", transform=ax.transAxes)
+        ax.set_title("Günlere göre doğruluk %", color=TEXT, fontsize=12, loc="left")
+
+        # 4) en iyi / en kötü
+        ax = fig.add_subplot(gs[1, 1])
+        ax.set_facecolor(BG)
+        ax.axis("off")
+        closed = sorted((i for i in summary["items"] if i["outcome"] != "OPEN"), key=lambda i: -i["pnl"])
+        best, worst = closed[:6], [i for i in closed[::-1] if i["pnl"] < 0][:6]
+
+        def line(i):
+            mark = "✓" if i["outcome"] == "TP" else "✗"
+            t = datetime.fromtimestamp(i["ts"], TZ).strftime("%d.%m %H:%M")
+            tp2 = " (TP2)" if i["tp2_hit"] else ""
+            return f"{mark} {i['symbol']:<6} {i['side'].upper():<5} {t} {i['pnl']:+.1f}%{tp2}"
+
+        ax.text(0.0, 1.0, "En iyi sonuçlar", color=GREEN, fontsize=13, fontweight="bold", va="top")
+        ax.text(0.0, 0.9, "\n".join(map(line, best)) or "—", color=TEXT, fontsize=11,
+                va="top", family="monospace")
+        ax.text(0.52, 1.0, "En kötü sonuçlar", color=RED, fontsize=13, fontweight="bold", va="top")
+        ax.text(0.52, 0.9, "\n".join(map(line, worst)) or "—", color=TEXT, fontsize=11,
+                va="top", family="monospace")
+
+        fig.suptitle(title, color=TEXT, fontsize=20, fontweight="bold")
+        fig.text(0.5, 0.925, f"{o['total']} tahmin · {summary['coins']} farklı coin · her tahmin 24 saat "
+                 "izlendi: önce TP1 ✓, önce SL ✗, hiçbiri açık",
+                 color=TEXT, ha="center", fontsize=11)
+        return _png(fig)
