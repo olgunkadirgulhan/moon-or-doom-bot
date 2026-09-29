@@ -8,6 +8,7 @@ from core.indicators import add_indicators, last_atr
 log = logging.getLogger(__name__)
 _scan_lock = asyncio.Lock()
 MIN_BARS = 60  # yeni listelenen coinlerde seviye/EMA hesabı anlamsız
+LAST_ALL: dict[str, dict] = {}  # son taramadaki tüm kripto sonuçları
 
 
 class InsufficientData(Exception):
@@ -150,4 +151,6 @@ async def scan() -> tuple[list[dict], list[dict], list[str]]:
         longs, shorts = _rank(results, cfg)
         db.save_signals(longs + shorts)
         tracker.record_onchain(results)
+        LAST_ALL.clear()
+        LAST_ALL.update({r["symbol"]: r for r in results})  # piyasa haritası (sıralamaya girmeyenler dahil)
         return longs, shorts, failed

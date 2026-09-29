@@ -1,4 +1,4 @@
-"""2×2 coin grafiği ve özet tablo PNG'leri (koyu tema)."""
+﻿"""2×2 coin grafiği ve özet tablo PNG'leri (koyu tema)."""
 import io
 import math
 import threading
@@ -99,8 +99,8 @@ def _draw_tf(ax, df, tf: str, lv: dict, res: dict) -> None:
             if view_lo <= p <= view_hi:
                 ax.axhline(p, color=color, lw=2.6 if conf >= 2 else 1.0, alpha=0.85 if conf >= 2 else 0.6)
 
-    trade = [("Giriş", res["entry"], BLUE), ("SL", res["sl"], RED),
-             ("TP1", res["tp1"], GREEN), ("TP2", res["tp2"], GREEN)]
+    trade = [("Emir", res["entry"], BLUE), ("Zarar-kes", res["sl"], RED),
+             ("Hedef 1", res["tp1"], GREEN), ("Hedef 2", res["tp2"], GREEN)]
     shown = sorted((t for t in trade if view_lo <= t[1] <= view_hi), key=lambda t: t[1])
     # yakın etiketler çakışmasın: her etiketi bir öncekinden en az min_gap yukarı it
     min_gap = 0.05 * (view_hi - view_lo)
@@ -108,13 +108,14 @@ def _draw_tf(ax, df, tf: str, lv: dict, res: dict) -> None:
     for name, p, color in shown:
         ax.axhline(p, color=color, ls="--", lw=1.2)
         label_y = p if label_y is None else max(p, label_y + min_gap)
-        ax.text(x_end, label_y, f" {name} {fmt_price(p)} ", color=color, fontsize=8,
+        ax.text(x_end, label_y, f" {name} {fmt_price_tr(p)} ", color=color, fontsize=8,
                 va="center", ha="right",
                 bbox={"facecolor": BG, "alpha": 0.75, "edgecolor": "none", "pad": 1})
         view_hi = max(view_hi, label_y + min_gap / 2)
 
     ax.set_ylim(view_lo, view_hi)
-    ax.set_title(tf.upper(), color=TEXT, fontsize=11, loc="left")
+    ax.set_title({"1h": "Saatlik", "4h": "4 saatlik", "8h": "8 saatlik", "1d": "Günlük"}[tf], color=TEXT,
+                 fontsize=11, loc="left")
     ax.set_ylabel("")
 
 
@@ -125,8 +126,7 @@ def _draw_netflow(ax, onchain: dict) -> None:
         s.set_color(GRID)
     daily = onchain.get("daily") or []
     if not onchain.get("available") or not daily:
-        reason = onchain.get("reason", "on-chain yok")
-        ax.text(0.5, 0.5, f"on-chain yok ({reason})" if reason != "on-chain yok" else reason,
+        ax.text(0.5, 0.5, "Borsa giriş/çıkış (on-chain) verisi bu varlık için yok",
                 color=TEXT, ha="center", va="center", transform=ax.transAxes, fontsize=9)
         ax.set_xticks([])
         ax.set_yticks([])
@@ -155,10 +155,13 @@ def coin_chart(res: dict) -> bytes:
             _draw_tf(ax, res["frames"][tf], tf, res["levels"][tf], res)
 
         color = {"AL": GREEN, "SAT": RED}.get(res["signal"], YELLOW)
-        rr = f"R:R {res['rr']:.1f}" + ("  (R:R düşük!)" if res["rr_low"] else "")
-        fig.suptitle(f"{res['symbol']} — {res['signal']} ({side_label(res)}) — Skor {res['score']:.0f} — {rr}",
+        plan = "Alış planı" if res["side"] == "long" else "Satış planı"
+        rr = f"kazanç/risk {res['rr']:.1f}".replace(".", ",")
+        fig.suptitle(f"{res['symbol']} — {plan} · sinyal gücü {res['score']:.0f}/100 · {rr}",
                      color=color, fontsize=18, fontweight="bold")
-        fig.text(0.97, 0.935, f"Fiyat {fmt_price(res['price'])}  ·  "
+        fig.text(0.03, 0.952, "Yeşil çizgi = destek (alış bölgesi) · kırmızı = direnç (satış bölgesi) · kalın = birden "
+                 "çok zaman diliminde görülen güçlü seviye · kesikli = plan", color=TEXT, fontsize=10)
+        fig.text(0.97, 0.952, f"Fiyat {fmt_price_tr(res['price'])}  ·  "
                  f"{datetime.now(TZ):%d.%m.%Y %H:%M}", color=TEXT, ha="right", fontsize=10)
         return _png(fig)
 

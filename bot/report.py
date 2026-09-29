@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, MenuButtonWebApp, WebAppInfo
 from telegram.constants import ParseMode
 
-from bot import monitor
+from bot import market_map, monitor
 from core import chart, db, scanner, settings, strategy, tracker
 
 TZ = ZoneInfo("Europe/Istanbul")
@@ -79,6 +79,10 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     tracker.record(everything, cfg["entry_mode"])
 
     await send_summary(bot, chat_id, cfg, regs, pos, cands, title)
+    try:
+        await market_map.send(bot, chat_id, cfg, regs, scanner.LAST_ALL, fixed, active, with_charts=tables_due(cfg))
+    except Exception:  # noqa: BLE001 — harita hatası raporu durdurmasın
+        log.exception("piyasa haritası hatası")
     if cands:
         await send_candidates(bot, chat_id, cands, cfg, regs)
 
