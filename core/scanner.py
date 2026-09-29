@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from core import data, db, levels, onchain, settings, signal, strategy, tradfi
+from core import data, db, levels, onchain, settings, signal, strategy, tracker, tradfi
 from core.indicators import add_indicators, last_atr
 
 log = logging.getLogger(__name__)
@@ -149,4 +149,5 @@ async def scan() -> tuple[list[dict], list[dict], list[str]]:
 
         longs, shorts = _rank(results, cfg)
         db.save_signals(longs + shorts)
+        tracker.record_onchain(results)
         return longs, shorts, failed

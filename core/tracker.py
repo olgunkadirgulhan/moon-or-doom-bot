@@ -95,6 +95,21 @@ def record(results: list[dict], mode: str = "market") -> None:
     ])
 
 
+ONCHAIN_FILE = TRACK_DIR / "onchain.csv"
+ONCHAIN_FIELDS = ["ts", "symbol", "price", "score", "netflow", "inflow", "outflow", "whales"]
+
+
+def record_onchain(results: list[dict]) -> None:
+    """Sıralamaya girsin girmesin, on-chain verisi olan her coinin anlık kaydı (ileride tahmin gücü ölçümü için)."""
+    now = int(time.time())
+    rows = [{"ts": now, "symbol": r["symbol"], "price": r["price"], "score": oc["score"],
+             "netflow": round(oc["netflow_24h"], 2), "inflow": round(oc["inflow_24h"], 2),
+             "outflow": round(oc["outflow_24h"], 2), "whales": len(oc["whales"])}
+            for r in results if (oc := r.get("onchain") or {}).get("available")]
+    if rows:
+        _append(ONCHAIN_FILE, ONCHAIN_FIELDS, rows)
+
+
 def _key(p: dict) -> tuple:
     return int(p["ts"]), p["symbol"], p["side"], p.get("market") or "crypto"
 
