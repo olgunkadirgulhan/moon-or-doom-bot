@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pozisyon Hesaplayıcı</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #16181d; --muted: #6b7280; --line: #e3e6eb;
+    --green: #0f9d7a; --red: #d93a3a; --yellow: #b7791f; --accent: #2563eb; --input: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --card: #171a21; --text: #e6e9ef; --muted: #9aa3b2; --line: #2a2f3a;
+      --green: #26a69a; --red: #ef5350; --yellow: #ffca28; --accent: #5b9dff; --input: #1f232c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #171a21; --text: #e6e9ef; --muted: #9aa3b2; --line: #2a2f3a;
+    --green: #26a69a; --red: #ef5350; --yellow: #ffca28; --accent: #5b9dff; --input: #1f232c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 40px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input { width: 100%; padding: 11px 12px; font-size: 17px; border-radius: 10px; border: 1px solid var(--line);
+          background: var(--input); color: var(--text); font-variant-numeric: tabular-nums; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .side { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .side button { padding: 11px; font-size: 16px; font-weight: 700; border-radius: 10px; border: 1px solid var(--line);
+                 background: var(--input); color: var(--muted); cursor: pointer; }
+  .side button.on.long { background: var(--green); color: #fff; border-color: var(--green); }
+  .side button.on.short { background: var(--red); color: #fff; border-color: var(--red); }
+  .big { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { background: var(--input); border-radius: 12px; padding: 10px 12px; }
+  .kpi .l { font-size: 12px; color: var(--muted); }
+  .kpi .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .rows div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line);
+              font-variant-numeric: tabular-nums; }
+  .rows div:last-child { border-bottom: 0; }
+  .rows span:first-child { color: var(--muted); }
+  .pos { color: var(--green); font-weight: 700; } .neg { color: var(--red); font-weight: 700; }
+  .checks li { list-style: none; margin: 4px 0; }
+  .checks { padding: 0; margin: 0; }
+  .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--yellow); }
+  .err { color: var(--red); font-weight: 600; }
+  ol.steps { margin: 0; padding-left: 20px; } ol.steps li { margin: 6px 0; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🧮 Pozisyon Hesaplayıcı</h1>
+  <div class="sub" id="subtitle">Önce kaybetmeye razı olduğun parayı seç; pozisyon ondan hesaplanır.</div>
+
+  <section class="card">
+    <h2>1 · Hesabın</h2>
+    <div class="grid">
+      <div><label for="capital">Toplam sermaye ($)</label><input id="capital" inputmode="decimal" value="1000"></div>
+      <div><label for="risk">İşlem başı risk (%)</label><input id="risk" inputmode="decimal" value="1"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2 · İşlem</h2>
+    <div class="side">
+      <button id="btnLong" class="long on" type="button">LONG (yükseliş)</button>
+      <button id="btnShort" class="short" type="button">SHORT (düşüş)</button>
+    </div>
+    <div class="grid">
+      <div><label for="entry">Giriş fiyatı</label><input id="entry" inputmode="decimal" placeholder="100"></div>
+      <div><label for="sl">Stop (SL)</label><input id="sl" inputmode="decimal" placeholder="97"></div>
+      <div><label for="tp1">TP1</label><input id="tp1" inputmode="decimal" placeholder="106"></div>
+      <div><label for="tp2">TP2</label><input id="tp2" inputmode="decimal" placeholder="112"></div>
+      <div><label for="lev">Kaldıraç (x)</label><input id="lev" inputmode="decimal" value="10"></div>
+      <div><label for="sym">Varlık (isteğe bağlı)</label><input id="sym" placeholder="BTC"></div>
+    </div>
+  </section>
+
+  <div id="error" class="card err hidden"></div>
+
+  <div id="out" class="hidden">
+    <section class="card">
+      <h2>3 · Borsaya gireceğin rakamlar</h2>
+      <div class="big">
+        <div class="kpi"><div class="l">Pozisyon büyüklüğü</div><div class="v" id="position">—</div></div>
+        <div class="kpi"><div class="l" id="marginLabel">Teminat</div><div class="v" id="margin">—</div></div>
+        <div class="kpi"><div class="l">Stop olursan kayıp</div><div class="v neg" id="riskUsd">—</div></div>
+        <div class="kpi"><div class="l">İki hedef de gelirse</div><div class="v pos" id="gainTotal">—</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Nasıl hesaplandı?</h2>
+      <div class="rows">
+        <div><span>Kaybetmeye razı olduğun</span><span id="rRisk"></span></div>
+        <div><span>Stop mesafesi</span><span id="rStop"></span></div>
+        <div><span>Pozisyon = risk ÷ stop mesafesi</span><span id="rPos"></span></div>
+        <div><span>Teminat = pozisyon ÷ kaldıraç</span><span id="rMargin"></span></div>
+        <div><span>Adet (yaklaşık)</span><span id="rQty"></span></div>
+        <div><span>R:R (TP1'e göre)</span><span id="rRR"></span></div>
+        <div><span>TP1'de yarısı kapanınca</span><span id="rG1" class="pos"></span></div>
+        <div><span>TP2'de kalan yarı kapanınca</span><span id="rG2" class="pos"></span></div>
+        <div><span>Tahmini komisyon (giriş+çıkış)</span><span id="rFee"></span></div>
+        <div><span>Yaklaşık likidasyon fiyatı</span><span id="rLiq"></span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Strateji kuralları</h2>
+      <ul class="checks" id="checks"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Borsada adım adım</h2>
+      <ol class="steps" id="steps"></ol>
+      <div class="note">Yaklaşık hesaptır: likidasyon borsaya ve bakım teminatına göre değişir. Komisyon ve fonlama ücreti
+        kazançtan düşülmemiştir. Yatırım tavsiyesi değildir.</div>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const LIQ_BUFFER = 0.9, FEE = 0.001, MIN_RR = 2;
+  let side = "long";
+
+  // Telegram içinde açıldıysa temayı uygula
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg && tg.initData) {  // initData sadece Telegram içinde dolu gelir
+    try {
+      tg.ready(); tg.expand();
+      document.documentElement.dataset.theme = tg.colorScheme === "light" ? "light" : "dark";
+    } catch (e) {}
+  }
+
+  const num = v => {
+    if (v == null) return NaN;
+    let s = String(v).trim().replace(/\s/g, "");
+    // "1.234,56" → 1234.56 ; "1234,56" → 1234.56 ; "1234.56" → 1234.56
+    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else s = s.replace(",", ".");
+    return parseFloat(s);
+  };
+  const usd = v => (v < 0 ? "−" : "") + Math.abs(v).toLocaleString("tr-TR", { maximumFractionDigits: v !== 0 && Math.abs(v) < 10 ? 2 : 0 }) + " $";
+  const price = v => {
+    const a = Math.abs(v);
+    const d = a >= 1000 ? 0 : a >= 100 ? 2 : a >= 1 ? 3 : Math.min(10, 3 - Math.floor(Math.log10(a)));
+    return v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  };
+  const pct = v => "%" + (v * 100).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+
+  // URL'den ön doldurma (bot butonları), sermaye/risk bu cihazda hatırlanır
+  const q = new URLSearchParams(location.search);
+  for (const k of ["entry", "sl", "tp1", "tp2", "lev", "sym"]) if (q.get(k)) $(k).value = q.get(k);
+  if (q.get("side") === "short") side = "short";
+  try {
+    const saved = JSON.parse(localStorage.getItem("calc") || "{}");
+    if (saved.capital) $("capital").value = saved.capital;
+    if (saved.risk) $("risk").value = saved.risk;
+  } catch (e) {}
+  if (q.get("sym")) $("subtitle").textContent = `${q.get("sym")} için botun verdiği seviyeler dolduruldu. Sermayeni kontrol et.`;
+
+  function setSide(s) {
+    side = s;
+    $("btnLong").classList.toggle("on", s === "long");
+    $("btnShort").classList.toggle("on", s === "short");
+    calc();
+  }
+  $("btnLong").onclick = () => setSide("long");
+  $("btnShort").onclick = () => setSide("short");
+  document.querySelectorAll("input").forEach(i => i.addEventListener("input", calc));
+
+  function fail(msg) {
+    $("error").textContent = msg;
+    $("error").classList.toggle("hidden", !msg);
+    $("out").classList.add("hidden");
+  }
+
+  function calc() {
+    const capital = num($("capital").value), riskPct = num($("risk").value) / 100;
+    const entry = num($("entry").value), sl = num($("sl").value);
+    const tp1 = num($("tp1").value), tp2Raw = num($("tp2").value), lev = num($("lev").value) || 1;
+    const sym = $("sym").value.trim();
+    try { localStorage.setItem("calc", JSON.stringify({ capital: $("capital").value, risk: $("risk").value })); } catch (e) {}
+
+    if (!(capital > 0) || !(riskPct > 0)) return fail("Sermaye ve risk yüzdesi 0'dan büyük olmalı.");
+    if (!(entry > 0) || !(sl > 0)) return fail(entry > 0 || sl > 0 ? "Giriş ve stop fiyatını gir." : "");
+    const long = side === "long";
+    if (long ? sl >= entry : sl <= entry)
+      return fail(long ? "LONG'da stop, giriş fiyatının ALTINDA olmalı." : "SHORT'ta stop, giriş fiyatının ÜSTÜNDE olmalı.");
+    const tp2 = tp2Raw > 0 ? tp2Raw : NaN;
+    if (tp1 > 0 && (long ? tp1 <= entry : tp1 >= entry))
+      return fail(long ? "LONG'da TP1 girişin üstünde olmalı." : "SHORT'ta TP1 girişin altında olmalı.");
+    fail("");
+    $("out").classList.remove("hidden");
+
+    const riskUsd = capital * riskPct;
+    const stopDist = Math.abs(entry - sl) / entry;
+    const position = riskUsd / stopDist;
+    const margin = position / lev;
+    const qty = position / entry;
+    const move = p => Math.abs(p - entry) / entry;
+    const g1 = tp1 > 0 ? position / 2 * move(tp1) : NaN;
+    const g2 = tp2 > 0 ? position / 2 * move(tp2) : NaN;
+    const rr = tp1 > 0 ? Math.abs(tp1 - entry) / Math.abs(entry - sl) : NaN;
+    const liqDist = LIQ_BUFFER / lev;
+    const liq = long ? entry * (1 - liqDist) : entry * (1 + liqDist);
+
+    $("position").textContent = usd(position);
+    $("marginLabel").textContent = `Teminat (${lev.toLocaleString("tr-TR")}x)`;
+    $("margin").textContent = usd(margin);
+    $("riskUsd").textContent = usd(-riskUsd);
+    $("gainTotal").textContent = isNaN(g1) ? "—" : "+" + usd((g1 || 0) + (g2 || 0));
+
+    $("rRisk").textContent = `${usd(capital)} × ${pct(riskPct)} = ${usd(riskUsd)}`;
+    $("rStop").textContent = `${price(entry)} → ${price(sl)} = ${pct(stopDist)}`;
+    $("rPos").textContent = `${usd(riskUsd)} ÷ ${pct(stopDist)} = ${usd(position)}`;
+    $("rMargin").textContent = `${usd(position)} ÷ ${lev.toLocaleString("tr-TR")} = ${usd(margin)}`;
+    $("rQty").textContent = `${qty.toLocaleString("tr-TR", { maximumSignificantDigits: 6 })} ${sym || "adet"}`;
+    $("rRR").textContent = isNaN(rr) ? "—" : rr.toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+    $("rG1").textContent = isNaN(g1) ? "—" : `+${usd(g1)}`;
+    $("rG2").textContent = isNaN(g2) ? "—" : `+${usd(g2)}`;
+    $("rFee").textContent = `≈ ${usd(position * FEE)}`;
+    $("rLiq").textContent = `≈ ${price(liq)} (${pct(liqDist)} ters hareket)`;
+
+    const checks = [
+      [!isNaN(rr) && rr >= MIN_RR, isNaN(rr) ? "R:R için TP1 gir" : `R:R ≥ ${MIN_RR} (şu an ${rr.toLocaleString("tr-TR", { maximumFractionDigits: 2 })})`],
+      [stopDist <= liqDist / 2, `Stop, likidasyon mesafesinin yarısından yakın (${pct(stopDist)} ≤ ${pct(liqDist / 2)})`],
+      [riskPct <= 0.01, `İşlem başı risk en fazla %1 (şu an ${pct(riskPct)})`],
+      [margin <= capital, margin <= capital ? "Teminat sermayenin içinde" : "Teminat sermayeden büyük: kaldıracı ya da riski düşür"],
+    ];
+    $("checks").innerHTML = checks.map(([ok, t]) =>
+      `<li class="${ok ? "ok" : "bad"}">${ok ? "✓" : "✗"} ${t}</li>`).join("") +
+      `<li class="${checks.every(c => c[0]) ? "ok" : "warn"}"><b>${checks.every(c => c[0])
+        ? "Kurallara uygun işlem." : "Kurallara uymuyor — girmemen önerilir."}</b></li>`;
+
+    const dir = long ? "Al / Long" : "Sat / Short";
+    $("steps").innerHTML = [
+      `Marjin türü: <b>Isolated (izole)</b>, kaldıraç: <b>${lev.toLocaleString("tr-TR")}x</b>`,
+      `<b>${dir}</b> ile <b>${usd(position)}</b> büyüklüğünde işlem aç (≈ ${qty.toLocaleString("tr-TR", { maximumSignificantDigits: 6 })} ${sym || "adet"}); hesabından ≈ <b>${usd(margin)}</b> teminat düşer`,
+      `Aynı anda stop emri: <b>${price(sl)}</b>`,
+      tp1 > 0 ? `Pozisyonun <b>yarısı</b> için kâr al: <b>${price(tp1)}</b>` : "TP1 gir",
+      tp2 > 0 ? `Kalan yarı için kâr al: <b>${price(tp2)}</b>` : "TP2 gir",
+      `TP1 gelince stopu giriş fiyatına (<b>${price(entry)}</b>) çek; 24 saatte hedefe varmazsa kapat`,
+    ].map(s => `<li>${s}</li>`).join("");
+  }
+
+  setSide(side);
+})();
+</script>
+</body>
+</html>

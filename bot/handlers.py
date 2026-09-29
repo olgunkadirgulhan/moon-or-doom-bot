@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from bot import jobs
 from bot.auth import restricted
-from bot.report import caption, send_charts, send_report
+from bot.report import calc_buttons, caption, send_charts, send_report
 from core import chart, data, db, onchain, scanner, settings
 
 HELP = (
@@ -15,6 +15,7 @@ HELP = (
     "/scan — tüm listeyi tara: en güçlü 10 LONG + 10 SHORT tablosu\n"
     "/coin ETH — tek coin detay grafiği\n"
     "/list — izleme listesi\n"
+    "/hesapla — pozisyon hesaplayıcı (sol alttaki 🧮 butonu da açar)\n"
     "/watch add PEPE · /watch rm PEPE — listeyi düzenle\n"
     "/settings — ayarları göster\n"
     "/settings <anahtar> <değer> — ayar değiştir\n"
@@ -78,6 +79,12 @@ def _detail(r: dict) -> str:
 
 
 @restricted
+async def calc_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Pozisyon hesaplayıcı: sermaye, risk %, giriş, SL ve TP'leri gir.",
+                                    reply_markup=calc_buttons(settings.all_settings(), []))
+
+
+@restricted
 async def list_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     syms = await scanner.universe()
     added = set(db.kv_get("watch_add", [])) | set(onchain.manual_coins())
@@ -131,6 +138,7 @@ async def _error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 def register(app: Application) -> None:
     for name, fn in [("start", help_cmd), ("help", help_cmd), ("scan", scan_cmd), ("coin", coin_cmd),
-                     ("list", list_cmd), ("watch", watch_cmd), ("settings", settings_cmd)]:
+                     ("list", list_cmd), ("watch", watch_cmd), ("settings", settings_cmd),
+                     ("hesapla", calc_cmd)]:
         app.add_handler(CommandHandler(name, fn))
     app.add_error_handler(_error)

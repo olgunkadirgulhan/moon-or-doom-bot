@@ -22,6 +22,7 @@ COMMANDS = [
     BotCommand("scan", "Tüm listeyi tara"),
     BotCommand("coin", "Tek coin detayı (ör. /coin ETH)"),
     BotCommand("list", "İzleme listesi"),
+    BotCommand("hesapla", "Pozisyon hesaplayıcı"),
     BotCommand("watch", "Listeye ekle/çıkar"),
     BotCommand("settings", "Ayarlar"),
     BotCommand("help", "Yardım"),

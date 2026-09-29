@@ -17,6 +17,7 @@ DEFAULTS = {
     "cand_min_rr": 2.0,
     "max_open": 3,
     "max_same_dir_crypto": 2,
+    "calc_url": "https://olgunkadirgulhan.github.io/moon-or-doom-calc/",
     "result_hour": 20,
     "top_n": 10,
     "universe_size": 40,

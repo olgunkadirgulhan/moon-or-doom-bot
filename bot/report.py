@@ -1,8 +1,9 @@
 """Tarama sonucunu Telegram'a gönderme: özet tablo + 10'arlı grafik albümleri."""
 import asyncio
 import logging
+from urllib.parse import urlencode
 
-from telegram import Bot, InputMediaPhoto
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, MenuButtonWebApp, WebAppInfo
 
 from core import chart, db, scanner, settings, strategy, tracker
 
@@ -42,6 +43,7 @@ async def send_charts(bot: Bot, chat_id: int, results: list[dict], ranks: list[i
 async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> None:
     """Sıra: işlem adayları → kripto LONG/SHORT → altın/gümüş/endeks → BIST100 LONG/SHORT."""
     cfg = settings.all_settings()
+    await set_calc_menu(bot, chat_id, cfg)
     longs, shorts, failed = await scanner.scan()
     # kripto dışı piyasalar: hata olursa kripto raporunu bozmasın
     try:
@@ -87,20 +89,48 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     ])
 
 
+def calc_link(cfg: dict, r: dict | None = None) -> str:
+    """Hesaplayıcı adresi; aday verilirse seviyeleri önceden doldurur."""
+    if not r:
+        return cfg["calc_url"]
+    params = {"side": r["side"], "sym": r.get("name") or r["symbol"], "lev": f"{cfg['leverage']:g}",
+              **{k: f"{r[k]:.10g}" for k in ("entry", "sl", "tp1", "tp2")}}
+    return f"{cfg['calc_url']}?{urlencode(params)}"
+
+
+def calc_buttons(cfg: dict, cands: list[dict]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(f"🧮 Hesapla: {r.get('name') or r['symbol']} "
+                                  f"({'LONG' if r['side'] == 'long' else 'SHORT'})",
+                                  web_app=WebAppInfo(calc_link(cfg, r)))] for r in cands]
+    return InlineKeyboardMarkup(rows or [[InlineKeyboardButton("🧮 Pozisyon hesaplayıcıyı aç",
+                                                               web_app=WebAppInfo(calc_link(cfg)))]])
+
+
+async def set_calc_menu(bot: Bot, chat_id: int, cfg: dict) -> None:
+    """Sohbetin menü butonunu hesaplayıcıya bağlar (Telegram'da kalıcı; her çalışmada yenilemek zararsız)."""
+    try:
+        await bot.set_chat_menu_button(chat_id=chat_id, menu_button=MenuButtonWebApp(
+            "🧮 Hesapla", WebAppInfo(calc_link(cfg))))
+    except Exception:  # noqa: BLE001 — menü butonu olmadan da rapor gitsin
+        log.exception("menü butonu ayarlanamadı")
+
+
 async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict) -> None:
     if not cands:
         await bot.send_message(
             chat_id,
             "🎯 İŞLEM ADAYI YOK — bu raporda strateji kurallarının hepsini geçen işlem çıkmadı.\n"
             f"(AL/SAT sinyali + R:R ≥ {cfg['cand_min_rr']:g} + stop likidasyondan güvenli uzaklıkta)\n"
-            "Beklemek de bir pozisyondur; aşağıdaki tablolar sadece bilgi içindir.")
+            "Beklemek de bir pozisyondur; aşağıdaki tablolar sadece bilgi içindir.",
+            reply_markup=calc_buttons(cfg, []))
         return
     png = await asyncio.to_thread(chart.candidates_table, cands, cfg, "Moon or Doom — İşlem Adayları")
     risk = cfg["capital_usd"] * cfg["risk_pct"] / 100
     await bot.send_photo(
-        chat_id, png, write_timeout=SEND_TIMEOUT,
+        chat_id, png, write_timeout=SEND_TIMEOUT, reply_markup=calc_buttons(cfg, cands),
         caption=f"🎯 İŞLEM ADAYLARI — kuralların hepsini geçen {len(cands)} işlem (en güçlüsü üstte). "
-                f"Her biri en fazla {risk:,.0f} $ risk (%{cfg['risk_pct']:g}). Önce 100 işlem sanal takip!"
+                f"Her biri en fazla {risk:,.0f} $ risk (%{cfg['risk_pct']:g}). Önce 100 işlem sanal takip! "
+                "Aşağıdaki butonla kendi sermayene göre hesapla."
                 .replace(",", "."))
 
 
