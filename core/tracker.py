@@ -4,12 +4,15 @@
   tracking/outcomes.csv     24 saati dolmuş tahminlerin kesin sonucu (bir kez hesaplanır)
   tracking/results.csv      gönderilen her dönem özetinin (günlük … yıllık) kaydı
 
-İsabet: her tahmin verildiği andan itibaren en fazla 24 saat 15 dakikalık mumlarla izlenir;
-önce SL'ye değerse ✗, önce TP1'e değerse ✓, hiçbirine değmediyse "açık". Aynı mumda ikisi
-birden görülürse temkinli olup SL sayılır.
+Giriş: "market" tahminler verildiği anda, "limit" tahminler fiyat 12 saat içinde giriş seviyesine
+değerse o anda açılmış sayılır; değmezse işlem hiç açılmamıştır (NOFILL — isabete ve hesaba girmez).
+
+İsabet: giriş anından itibaren 24 saat 15 dakikalık mumlarla izlenir; önce SL'ye değerse ✗, önce
+TP1'e değerse ✓, hiçbirine değmediyse "açık". Aynı mumda ikisi birden görülürse temkinli olup SL sayılır.
 
 Strateji (sanal hesap): SL'de −1R; TP1'de yarısı kapanır ve stop girişe çekilir; kalan yarı
-TP2'de, girişte (başabaş) ya da 24. saatte son fiyattan kapanır. Komisyon R'den düşülür.
+TP2'de, girişte (başabaş) ya da horizon_h (varsayılan 72) saat sonunda son fiyattan kapanır.
+Komisyon R'den düşülür.
 """
 import csv
 import time
@@ -24,13 +27,15 @@ TRACK_DIR = ROOT / "tracking"
 PRED_FILE = TRACK_DIR / "predictions.csv"
 OUT_FILE = TRACK_DIR / "outcomes.csv"
 RESULTS_FILE = TRACK_DIR / "results.csv"
-PRED_FIELDS = ["ts", "symbol", "side", "signal", "score", "rr", "entry", "sl", "tp1", "tp2", "market", "candidate"]
+PRED_FIELDS = ["ts", "symbol", "side", "signal", "score", "rr", "entry", "sl", "tp1", "tp2", "market", "candidate",
+               "price", "mode"]
 OUT_FIELDS = ["ts", "symbol", "side", "market", "outcome", "tp2_hit", "pnl", "r", "exit_ts"]
 RESULT_FIELDS = ["sent_at", "period", "title", "total", "tp", "sl", "open", "accuracy",
                  "acc_crypto", "acc_tradfi", "acc_bist", "acct_trades", "acct_expectancy_r", "acct_equity"]
 TF = "15m"
 TF_MS = 15 * 60 * 1000
-HORIZON = 24 * 3600  # tahmin başına izleme süresi
+HORIZON = 24 * 3600  # isabet ölçümü: giriş sonrası izleme süresi
+FILL_H = 12  # limit emrin geçerlilik süresi (saat)
 FEE_PCT = 0.1  # giriş + çıkış toplam komisyon, pozisyonun %'si
 MARKET_LABEL = {"crypto": "Kripto", "tradfi": "Altın/Gümüş/Endeks", "bist": "BIST hisse"}
 
@@ -75,11 +80,11 @@ def _append(path, fields: list[str], rows: list[dict]) -> None:
         w.writerows(rows)
 
 
-def record(results: list[dict]) -> None:
+def record(results: list[dict], mode: str = "market") -> None:
     now = int(time.time())
     _append(PRED_FILE, PRED_FIELDS, [
         {"ts": now, **{k: r.get(k, "") for k in PRED_FIELDS[1:]},
-         "market": r.get("market") or "crypto", "candidate": 1 if r.get("candidate") else ""}
+         "market": r.get("market") or "crypto", "candidate": 1 if r.get("candidate") else "", "mode": mode}
         for r in results
     ])
 
@@ -95,9 +100,12 @@ def _load(since: int, until: int) -> list[dict]:
         ts = int(r["ts"])
         if since <= ts <= until:
             market = r.get("market") or "crypto"
-            out.append({**r, "ts": ts, "market": market, "candidate": r.get("candidate") == "1",
-                        "name": r["symbol"] if market == "crypto" else names.get(r["symbol"], r["symbol"]),
-                        **{k: float(r[k]) for k in ("score", "rr", "entry", "sl", "tp1", "tp2")}})
+            p = {**r, "ts": ts, "market": market, "candidate": r.get("candidate") == "1",
+                 "mode": r.get("mode") or "market",
+                 "name": r["symbol"] if market == "crypto" else names.get(r["symbol"], r["symbol"]),
+                 **{k: float(r[k]) for k in ("score", "rr", "entry", "sl", "tp1", "tp2")}}
+            p["price"] = float(r["price"]) if r.get("price") else p["entry"]  # eski kayıtlar: market giriş
+            out.append(p)
     return out
 
 
@@ -140,12 +148,12 @@ def _pnl(p: dict, price: float) -> float:
     return change if p["side"] == "long" else -change
 
 
-def _simulate(p: dict, candles: list[list]) -> dict:
+def _simulate(p: dict, candles: list[list], horizon: int = HORIZON) -> dict:
     """İsabet (TP/SL/OPEN) + strateji kuralıyla R sonucu ve çıkış zamanı."""
     long = p["side"] == "long"
     entry, risk = p["entry"], abs(p["entry"] - p["sl"])
     rr = lambda price: abs(price - entry) / risk  # noqa: E731
-    start, end = p["ts"] * 1000, (p["ts"] + HORIZON) * 1000
+    start, end = p["ts"] * 1000, (p["ts"] + horizon) * 1000
     first, tp2_hit, half, r, exit_ms, last = None, False, False, 0.0, None, entry
     stop = p["sl"]
 
@@ -188,21 +196,58 @@ def _simulate(p: dict, candles: list[list]) -> dict:
             "r": r - fee_r, "exit_ts": exit_ms // 1000}
 
 
+def strategy_horizon() -> int:
+    return int(settings.get("horizon_h")) * 3600
+
+
+def resolve_after() -> int:
+    """Bir tahminin kesin sonucu için gereken süre: limit bekleme + en uzun izleme."""
+    return FILL_H * 3600 + max(HORIZON, strategy_horizon())
+
+
+def find_fill(p: dict, candles: list[list], mode: str, fill_h: int = FILL_H) -> int | None:
+    """Giriş anı (sn): market → hemen; limit → fiyat fill_h saat içinde girişe değdiği mum; değmezse None."""
+    if mode != "limit" or p["entry"] == p.get("price", p["entry"]):
+        return p["ts"]
+    long = p["side"] == "long"
+    start, expiry = p["ts"] * 1000, (p["ts"] + fill_h * 3600) * 1000
+    for t, _o, high, low, _c, _v in candles:
+        if t < start:
+            continue
+        if t >= expiry:
+            break
+        if (low <= p["entry"]) if long else (high >= p["entry"]):
+            return t // 1000
+    return None
+
+
+def simulate_full(p: dict, candles: list[list], strat_h: int | None = None) -> dict:
+    """İsabet (giriş sonrası 24s) + strateji R'si (giriş sonrası strat_h) — limit dolmadıysa NOFILL."""
+    fill = find_fill(p, candles, p.get("mode", "market"))
+    if fill is None:
+        return {"outcome": "NOFILL", "tp2_hit": False, "pnl": 0.0, "r": None, "exit_ts": p["ts"] + FILL_H * 3600}
+    q = {**p, "ts": fill}
+    acc = _simulate(q, candles, HORIZON)
+    strat = _simulate(q, candles, strat_h or strategy_horizon())
+    return {"outcome": acc["outcome"], "tp2_hit": acc["tp2_hit"], "pnl": acc["pnl"],
+            "r": strat["r"], "exit_ts": strat["exit_ts"]}
+
+
 async def _simulate_group(market: str, sym: str, ps: list[dict], until: int) -> list[dict]:
     try:
         candles = await _candles(market, sym, min(p["ts"] for p in ps) * 1000,
-                                 min(max(p["ts"] for p in ps) + HORIZON, until) * 1000)
+                                 min(max(p["ts"] for p in ps) + resolve_after(), until) * 1000)
     except Exception:  # noqa: BLE001 — veri yoksa bu turda sonuçlanmaz
         candles = []
-    return [{**p, **_simulate(p, candles), "_has_data": bool(candles)} for p in ps]
+    return [{**p, **simulate_full(p, candles), "_has_data": bool(candles)} for p in ps]
 
 
 async def resolve_pending(now: int | None = None) -> int:
-    """24 saati dolmuş ama sonucu kaydedilmemiş tüm tahminleri kalıcı olarak sonuçlandırır."""
+    """Süresi dolmuş (limit bekleme + izleme) ama sonucu kaydedilmemiş tüm tahminleri kalıcı olarak sonuçlandırır."""
     now = now or int(time.time())
     known = _outcomes()
     pending = defaultdict(list)
-    for p in _load(0, now - HORIZON):
+    for p in _load(0, now - resolve_after()):
         if _key(p) not in known:
             pending[(p["market"], p["symbol"])].append(p)
     rows = []
@@ -211,7 +256,7 @@ async def resolve_pending(now: int | None = None) -> int:
             if s["_has_data"]:
                 rows.append({"ts": s["ts"], "symbol": sym, "side": s["side"], "market": market,
                              "outcome": s["outcome"], "tp2_hit": s["tp2_hit"], "pnl": round(s["pnl"], 4),
-                             "r": round(s["r"], 4), "exit_ts": s["exit_ts"]})
+                             "r": "" if s["r"] is None else round(s["r"], 4), "exit_ts": s["exit_ts"]})
     if rows:
         _append(OUT_FILE, OUT_FIELDS, rows)
     return len(rows)
@@ -220,10 +265,12 @@ async def resolve_pending(now: int | None = None) -> int:
 # ---------- dönem özeti ----------
 
 def _stats(items: list[dict]) -> dict:
+    """Dolmayan limit emirler (NOFILL) işlem sayılmaz: toplamda ve doğrulukta yer almaz."""
     tp = sum(i["outcome"] == "TP" for i in items)
     sl = sum(i["outcome"] == "SL" for i in items)
     op = sum(i["outcome"] == "OPEN" for i in items)
-    return {"total": len(items), "tp": tp, "sl": sl, "open": op,
+    return {"total": tp + sl + op, "tp": tp, "sl": sl, "open": op,
+            "nofill": sum(i["outcome"] == "NOFILL" for i in items),
             "accuracy": round(100 * tp / (tp + sl), 1) if tp + sl else None}
 
 
@@ -329,21 +376,31 @@ def virtual_account(until: int, capital: float = 1000.0, risk_pct: float = 1.0,
                     max_open: int = 3, max_same_dir_crypto: int = 2) -> dict:
     """Başlangıçtan beri işlem adaylarını strateji kurallarıyla işleyen sanal hesap (bileşik, %risk_pct)."""
     known = _outcomes()
-    cands = sorted((p for p in _load(0, until) if p["candidate"]), key=lambda p: p["ts"])
-    open_pos, trades, pending = [], [], 0
-    for p in cands:
+    resolved, pending = [], 0
+    for p in sorted((p for p in _load(0, until) if p["candidate"]), key=lambda p: p["ts"]):
         o = known.get(_key(p))
+        if o and o["outcome"] == "NOFILL":
+            continue  # limit emir dolmadı: işlem açılmadı
         if not o or o["r"] is None:
             pending += 1
-            continue
+        else:
+            resolved.append({**p, **o})
+    return {**account(resolved, capital, risk_pct, max_open, max_same_dir_crypto), "pending": pending}
+
+
+def account(signals: list[dict], capital: float = 1000.0, risk_pct: float = 1.0,
+            max_open: int = 3, max_same_dir_crypto: int = 2) -> dict:
+    """Sonuçlanmış adayları (ts, exit_ts, r, symbol, side, market) sırayla işler: aynı varlıkta ya da limit dolmuşken
+    yeni işlem açılmaz; her işlem o anki sermayenin %risk_pct'i kadar risk taşır (bileşik)."""
+    open_pos, trades = [], []
+    for p in sorted(signals, key=lambda p: p["ts"]):
         open_pos = [q for q in open_pos if q["exit_ts"] > p["ts"]]
         same_dir = sum(q["market"] == "crypto" and q["side"] == p["side"] for q in open_pos)
         if (any(q["symbol"] == p["symbol"] for q in open_pos) or len(open_pos) >= max_open
                 or (p["market"] == "crypto" and same_dir >= max_same_dir_crypto)):
             continue
-        t = {**p, **o}
-        open_pos.append(t)
-        trades.append(t)
+        open_pos.append(p)
+        trades.append(p)
 
     equity, peak, max_dd, curve = capital, capital, 0.0, []
     streak = worst_streak = 0
@@ -358,11 +415,12 @@ def virtual_account(until: int, capital: float = 1000.0, risk_pct: float = 1.0,
     n = len(trades)
     rs = [t["r"] for t in trades]
     expectancy = sum(rs) / n if n else None
+    gains, losses = sum(r for r in rs if r > 0), -sum(r for r in rs if r < 0)
     return {
-        "capital": capital, "risk_pct": risk_pct, "equity": equity, "trades": n, "pending": pending,
+        "capital": capital, "risk_pct": risk_pct, "equity": equity, "trades": n, "pending": 0,
         "wins": sum(r > 0 for r in rs), "win_rate": 100 * sum(r > 0 for r in rs) / n if n else None,
         "expectancy": expectancy, "total_r": sum(rs), "max_dd": max_dd, "worst_streak": worst_streak,
-        "curve": curve,
+        "profit_factor": gains / losses if losses else None, "curve": curve, "taken": trades,
         # Aşama 1 → gerçek para kapısı
         "gate": {"n": n >= 100, "expectancy": expectancy is not None and expectancy > 0.2, "dd": max_dd < 15},
     }

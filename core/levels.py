@@ -48,9 +48,10 @@ def _cluster(pts: list[tuple[float, int]], df: pd.DataFrame, tol: float) -> list
     return out
 
 
-def compute_levels(df: pd.DataFrame, tf: str, price: float) -> dict:
+def compute_levels(df: pd.DataFrame, tf: str, price: float, pts: list | None = None) -> dict:
+    """pts verilirse swing noktaları yeniden aranmaz (backtest hızı için önceden hesaplanmış)."""
     atr = last_atr(df)
-    clusters = _cluster(swing_points(df, FRACTAL[tf]), df, 0.5 * atr)
+    clusters = _cluster(swing_points(df, FRACTAL[tf]) if pts is None else pts, df, 0.5 * atr)
     top = max((s for _, s in clusters), default=1.0)
     norm = [(p, round(100 * s / top, 1), 1) for p, s in clusters]
 

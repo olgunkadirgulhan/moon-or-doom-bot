@@ -131,7 +131,7 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const LIQ_BUFFER = 0.9, FEE = 0.001, MIN_RR = 2;
+  const LIQ_BUFFER = 0.9, FEE = 0.001, MIN_RR = 2.5;  // backtest 29.09.2026 ile güncellendi
   let side = "long";
 
   // Telegram içinde açıldıysa temayı uygula
@@ -163,6 +163,8 @@
   const q = new URLSearchParams(location.search);
   for (const k of ["entry", "sl", "tp1", "tp2", "lev", "sym"]) if (q.get(k)) $(k).value = q.get(k);
   if (q.get("side") === "short") side = "short";
+  const limitMode = q.get("mode") === "limit";
+  const horizonH = parseInt(q.get("hz") || "72", 10);
   try {
     const saved = JSON.parse(localStorage.getItem("calc") || "{}");
     if (saved.capital) $("capital").value = saved.capital;
@@ -234,7 +236,7 @@
     $("rLiq").textContent = `≈ ${price(liq)} (${pct(liqDist)} ters hareket)`;
 
     const checks = [
-      [!isNaN(rr) && rr >= MIN_RR, isNaN(rr) ? "R:R için TP1 gir" : `R:R ≥ ${MIN_RR} (şu an ${rr.toLocaleString("tr-TR", { maximumFractionDigits: 2 })})`],
+      [!isNaN(rr) && rr >= MIN_RR, isNaN(rr) ? "R:R için TP1 gir" : `R:R ≥ ${MIN_RR.toLocaleString("tr-TR")} (şu an ${rr.toLocaleString("tr-TR", { maximumFractionDigits: 2 })})`],
       [stopDist <= liqDist / 2, `Stop, likidasyon mesafesinin yarısından yakın (${pct(stopDist)} ≤ ${pct(liqDist / 2)})`],
       [riskPct <= 0.01, `İşlem başı risk en fazla %1 (şu an ${pct(riskPct)})`],
       [margin <= capital, margin <= capital ? "Teminat sermayenin içinde" : "Teminat sermayeden büyük: kaldıracı ya da riski düşür"],
@@ -247,11 +249,14 @@
     const dir = long ? "Al / Long" : "Sat / Short";
     $("steps").innerHTML = [
       `Marjin türü: <b>Isolated (izole)</b>, kaldıraç: <b>${lev.toLocaleString("tr-TR")}x</b>`,
-      `<b>${dir}</b> ile <b>${usd(position)}</b> büyüklüğünde işlem aç (≈ ${qty.toLocaleString("tr-TR", { maximumSignificantDigits: 6 })} ${sym || "adet"}); hesabından ≈ <b>${usd(margin)}</b> teminat düşer`,
+      (limitMode
+        ? `<b>LİMİT emir</b>: <b>${dir}</b>, fiyat <b>${price(entry)}</b>, büyüklük <b>${usd(position)}</b> (≈ ${qty.toLocaleString("tr-TR", { maximumSignificantDigits: 6 })} ${sym || "adet"}). <b>12 saat</b> içinde dolmazsa iptal et`
+        : `<b>${dir}</b> ile <b>${usd(position)}</b> büyüklüğünde işlem aç (≈ ${qty.toLocaleString("tr-TR", { maximumSignificantDigits: 6 })} ${sym || "adet"})`)
+        + `; hesabından ≈ <b>${usd(margin)}</b> teminat düşer`,
       `Aynı anda stop emri: <b>${price(sl)}</b>`,
       tp1 > 0 ? `Pozisyonun <b>yarısı</b> için kâr al: <b>${price(tp1)}</b>` : "TP1 gir",
       tp2 > 0 ? `Kalan yarı için kâr al: <b>${price(tp2)}</b>` : "TP2 gir",
-      `TP1 gelince stopu giriş fiyatına (<b>${price(entry)}</b>) çek; 24 saatte hedefe varmazsa kapat`,
+      `TP1 gelince stopu giriş fiyatına (<b>${price(entry)}</b>) çek; <b>${horizonH} saatte</b> hedefe varmazsa kapat`,
     ].map(s => `<li>${s}</li>`).join("");
   }
 

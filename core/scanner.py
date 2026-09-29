@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from core import data, db, levels, onchain, settings, signal, tradfi
+from core import data, db, levels, onchain, settings, signal, strategy, tradfi
 from core.indicators import add_indicators, last_atr
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ async def universe() -> list[str]:
     """Hacme göre ilk N + coins.yaml manuel + /watch add − /watch rm."""
     extra = db.kv_get("watch_add", [])
     excluded = set(db.kv_get("watch_rm", []))
-    top = await data.top_by_volume(settings.get("universe_size"))
+    top = await data.top_by_volume(settings.get("universe_size"), settings.get("min_volume_usd"))
     listed = await data.tickers()
     out = []
     for s in top + onchain.manual_coins() + extra:
@@ -80,6 +80,15 @@ def evaluate_frames(symbol: str, raw: dict, cfg: dict, oc: dict,
     res = signal.evaluate(symbol, frames, lv, oc, cfg)
     res.update(frames=frames, levels=lv, onchain=oc, market=market, name=name or symbol)
     return res
+
+
+async def regimes(fixed: list[dict]) -> dict[str, str]:
+    """{crypto: BTC günlük trendi, bist: BIST100 günlük trendi} — up / down / neutral."""
+    out = {"crypto": strategy.regime(add_indicators(await data.fetch_ohlcv("BTC", "1d")))}
+    bist = next((r for r in fixed if r["symbol"] == "BIST100"), None)
+    if bist:
+        out["bist"] = strategy.regime(bist["frames"]["1d"])
+    return out
 
 
 def _rank(results: list[dict], cfg: dict) -> tuple[list[dict], list[dict]]:

@@ -63,8 +63,12 @@ async def fetch_all_tf(symbol: str) -> dict[str, pd.DataFrame]:
     return dict(zip(TIMEFRAMES, frames))
 
 
+TOKENIZED_STOCKS = {"CRCLB", "SPCXB", "TSLAB", "NVDAB", "AAPLB", "MSTRB", "COINB", "HOODB"}
+
+
 def _eligible(base: str) -> bool:
-    return base not in STABLES and not base.endswith(LEVERAGED_SUFFIXES)
+    return (base.isascii() and base.isalnum() and base not in STABLES and base not in TOKENIZED_STOCKS
+            and not base.endswith(LEVERAGED_SUFFIXES))
 
 
 async def tickers() -> dict[str, dict]:
@@ -86,9 +90,11 @@ async def tickers() -> dict[str, dict]:
     return out
 
 
-async def top_by_volume(n: int) -> list[str]:
+async def top_by_volume(n: int, min_volume: float = 0.0) -> list[str]:
+    """24s USDT hacmine göre ilk n; min_volume altındakiler (sığ piyasa: spread/kayma R:R'yi bozar) elenir."""
     t = await tickers()
-    ranked = sorted((b for b in t if _eligible(b)), key=lambda b: t[b]["volume"], reverse=True)
+    ranked = sorted((b for b in t if _eligible(b) and t[b]["volume"] >= min_volume),
+                    key=lambda b: t[b]["volume"], reverse=True)
     return ranked[:n]
 
 

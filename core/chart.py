@@ -319,7 +319,7 @@ def result_chart(summary: dict, title: str) -> bytes:
         ax = fig.add_subplot(gs[1, 1])
         ax.set_facecolor(BG)
         ax.axis("off")
-        closed = sorted((i for i in summary["items"] if i["outcome"] != "OPEN"), key=lambda i: -i["pnl"])
+        closed = sorted((i for i in summary["items"] if i["outcome"] in ("TP", "SL")), key=lambda i: -i["pnl"])
         best, worst = closed[:6], [i for i in closed[::-1] if i["pnl"] < 0][:6]
 
         def line(i):
@@ -339,7 +339,8 @@ def result_chart(summary: dict, title: str) -> bytes:
         _draw_account(fig.add_subplot(gs[2, 0]), fig.add_subplot(gs[2, 1]), summary["account"])
 
         fig.suptitle(title, color=TEXT, fontsize=20, fontweight="bold", y=0.985)
-        fig.text(0.5, 0.95, f"{o['total']} tahmin · {summary['coins']} farklı varlık · her tahmin 24 saat "
+        nofill = f" · {o['nofill']} limit emir dolmadı (sayılmadı)" if o.get("nofill") else ""
+        fig.text(0.5, 0.95, f"{o['total']} işlem · {summary['coins']} farklı varlık{nofill} · girişten sonra 24 saat "
                  "izlendi: önce TP1 ✓, önce SL ✗, hiçbiri açık",
                  color=TEXT, ha="center", fontsize=11)
         return _png(fig)
@@ -358,7 +359,7 @@ def _draw_account(ax_curve, ax_text, a: dict) -> None:
         ax_curve.tick_params(axis="x", labelrotation=45)
         ax_curve.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:,.0f} $".replace(",", ".")))
     else:
-        ax_curve.text(0.5, 0.5, "Henüz sonuçlanmış işlem adayı yok\n(adaylar 24 saat sonra sonuçlanır)",
+        ax_curve.text(0.5, 0.5, "Henüz sonuçlanmış işlem adayı yok\n(adaylar limit bekleme + işlem süresi dolunca sonuçlanır)",
                       color=TEXT, ha="center", va="center", transform=ax_curve.transAxes)
     start_txt = f"{start:,.0f}".replace(",", ".")
     ax_curve.set_title(f"Sanal hesap — başlangıçtan beri ({start_txt} $, işlem başı %{a['risk_pct']:g} risk)",
@@ -402,8 +403,8 @@ def _draw_account(ax_curve, ax_text, a: dict) -> None:
                else "✗ Henüz gerçek para yok:\nsanal takibe devam")
     ax_text.text(0.60, y - 0.05, verdict, color=GREEN if all(g.values()) else YELLOW, fontsize=12,
                  fontweight="bold", va="top", transform=ax_text.transAxes)
-    ax_text.text(0.60, y - 0.3, "Kurallar: TP1'de yarısı kapanır, stop girişe çekilir;\n"
-                 "kalan TP2'de ya da 24 saat sonunda kapanır.", color=TEXT, fontsize=9.5, va="top",
+    ax_text.text(0.60, y - 0.3, "Kurallar: limit giriş (12 saat); TP1'de yarısı kapanır,\n"
+                 "stop girişe çekilir; kalan TP2'de ya da süre dolunca kapanır.", color=TEXT, fontsize=9.5, va="top",
                  transform=ax_text.transAxes)
     ax_text.set_title("Sanal hesap özeti", color=TEXT, fontsize=12, loc="left")
 
@@ -412,7 +413,9 @@ def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
     """Strateji kurallarını geçen işlem adayları + %risk'e göre pozisyon büyüklüğü."""
     usd = lambda v: f"{v:,.0f}".replace(",", ".") + " $"  # noqa: E731
     market = {"crypto": "Kripto", "tradfi": "Emtia/Endeks", "bist": "BIST"}
-    headers = ["#", "Varlık", "Pazar", "Yön", "Sinyal", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R",
+    limit = cfg.get("entry_mode") == "limit"
+    headers = ["#", "Varlık", "Pazar", "Yön", "Sinyal", "Skor", "Limit giriş" if limit else "Giriş", "SL", "TP1",
+               "TP2", "R:R",
                "Stop %", "Pozisyon", f"Teminat ({cfg['leverage']:g}x)", "Risk", "TP1 kazanç", "TP2 kazanç"]
     rows = [[
         str(i), r.get("name") or r["symbol"], market.get(r.get("market"), "Kripto"), side_label(r), r["signal"],
@@ -456,8 +459,9 @@ def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
             f"Pozisyon büyüklüğü: sermaye {usd(cfg['capital_usd'])} × %{cfg['risk_pct']:g} risk = işlem başı en fazla "
             f"{usd(risk)} kayıp. Pozisyon = risk ÷ stop mesafesi; teminat = pozisyon ÷ {cfg['leverage']:g}x. "
             "Kaldıraç riski değil, sadece bağlanan teminatı değiştirir.",
-            "Yönetim: stopu girişle birlikte koy · TP1'de yarısını kapat, stopu girişe çek · kalanı TP2'de ya da "
-            "24 saat sonunda kapat · stop asla uzaklaştırılmaz.",
+            ("Giriş: LİMİT emir, 12 saat içinde dolmazsa iptal · " if limit else "Giriş: güncel fiyattan · ")
+            + "stopu girişle birlikte koy · TP1'de yarısını kapat, stopu girişe çek · kalanı TP2'de ya da "
+            f"{cfg['horizon_h']} saat sonunda kapat · stop asla uzaklaştırılmaz.",
             "TP1/TP2 kazanç = pozisyonun yarısının o hedefteki kârı. Kurallar: AL/SAT sinyali, R:R ≥ "
             f"{cfg['cand_min_rr']:g}, stop likidasyonun yarısından yakın, en fazla {cfg['max_open']} işlem. "
             "Komisyon hariç. Yatırım tavsiyesi değildir.",

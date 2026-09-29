@@ -6,6 +6,7 @@ Kurallar (hepsi birden):
   3. Stop mesafesi ≤ likidasyon mesafesinin yarısı
   4. En fazla max_open aday; aynı yönde en fazla max_same_dir_crypto kripto; her varlık bir kez
   5. BIST hisseleri sadece seans saatinde (hafta içi 10:00–18:00 İstanbul)
+  6. Rejim: BTC (kripto) / BIST100 (hisse) günlük trendi düşüşteyse long, yükselişteyse short yok
 """
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -24,7 +25,23 @@ def stop_pct(r: dict) -> float:
     return 100 * abs(r["entry"] - r["sl"]) / r["entry"]
 
 
-def rejection(r: dict, cfg: dict) -> str | None:
+def regime(df_1d) -> str:
+    """Günlük trend: up (fiyat ve EMA50 > EMA200), down (ikisi de altında), aksi halde neutral."""
+    row = df_1d.iloc[-1]
+    close, e50, e200 = row["Close"], row["ema50"], row["ema200"]
+    if e200 != e200 or e50 != e50:  # NaN: yeterli geçmiş yok
+        return "neutral"
+    if close > e200 and e50 > e200:
+        return "up"
+    if close < e200 and e50 < e200:
+        return "down"
+    return "neutral"
+
+
+REGIME_KEY = {"crypto": "crypto", "bist": "bist"}  # altın/gümüş/endeks sabit listesi rejim filtresiz
+
+
+def rejection(r: dict, cfg: dict, regimes: dict | None = None, check_session: bool = True) -> str | None:
     """Kural dışı kalma nedeni; None → aday olabilir."""
     liq_pct = 100 * LIQ_BUFFER / cfg["leverage"]
     if r["signal"] == "BEKLE":
@@ -33,8 +50,14 @@ def rejection(r: dict, cfg: dict) -> str | None:
         return "R:R düşük"
     if stop_pct(r) > liq_pct / 2:
         return "stop likidasyona yakın"
-    if r.get("market") == "bist" and not bist_open():
+    if check_session and r.get("market") == "bist" and not bist_open():
         return "BIST kapalı"
+    if cfg.get("regime_filter") and regimes:
+        reg = regimes.get(REGIME_KEY.get(r.get("market") or "crypto"))
+        if r["side"] == "long" and reg == "down":
+            return "piyasa düşüş trendinde"
+        if r["side"] == "short" and reg == "up":
+            return "piyasa yükseliş trendinde"
     return None
 
 
@@ -42,9 +65,9 @@ def conviction(r: dict) -> float:
     return abs(r["score"] - 50)
 
 
-def select(pool: list[dict], cfg: dict) -> list[dict]:
+def select(pool: list[dict], cfg: dict, regimes: dict | None = None, check_session: bool = True) -> list[dict]:
     """Kuralları geçen, kanaati en güçlü adaylar; her birine pozisyon büyüklüğü eklenir."""
-    ok = sorted((r for r in pool if rejection(r, cfg) is None), key=conviction, reverse=True)
+    ok = sorted((r for r in pool if rejection(r, cfg, regimes, check_session) is None), key=conviction, reverse=True)
     chosen, seen = [], set()
     for r in ok:
         key = (r.get("market"), r["symbol"])

@@ -14,10 +14,14 @@ DEFAULTS = {
     # strateji: işlem adayları ve sanal hesap
     "capital_usd": 1000,
     "risk_pct": 1.0,
-    "cand_min_rr": 2.0,
+    "cand_min_rr": 2.5,  # backtest 29.09.2026: 2.5 hem eğitimde hem testte artı (tracking/backtest.md)
+    "horizon_h": 72,  # strateji işlem süresi (saat); isabet ölçümü 24 saat kalır
     "max_open": 3,
     "max_same_dir_crypto": 2,
     "calc_url": "https://olgunkadirgulhan.github.io/moon-or-doom-calc/",
+    "min_volume_usd": 20_000_000,  # likidite filtresi (kripto evreni)
+    "regime_filter": True,  # BTC / BIST100 günlük trendine karşı işlem adayı yok
+    "entry_mode": "limit",  # limit = en yakın güçlü seviyede 12 saat bekle (backtest'te tutarlı), market = güncel fiyat
     "result_hour": 20,
     "top_n": 10,
     "universe_size": 40,
@@ -53,6 +57,8 @@ def _parse(default, raw: str):
         return int(raw)
     if isinstance(default, float):
         return float(raw)
+    if isinstance(default, str):
+        return raw
     if isinstance(default, list):
         return sorted({int(x) for x in raw.replace(" ", "").split(",") if x})
     raise ValueError("desteklenmeyen tip")

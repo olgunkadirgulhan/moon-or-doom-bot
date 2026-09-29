@@ -8,3 +8,4 @@
 - Faz 5: core/onchain.py (Etherscan V2, cüzdan başına tokentx, 7g günlük netflow, balina) + config yaml'ları. API key ile test edilmedi.
 - Faz 6: hata yönetimi, rate limit, Dockerfile, deploy/moon-or-doom.service, run.bat.
 - GitHub Actions: .github/workflows/report.yml + bot/oneshot.py, gunde 4 rapor (00/06/12/18 Istanbul). Binance verisi data-api.binance.vision uzerinden (ABD engeli yok). Komutlar sadece yerel bot.main acikken calisir.
+- 29.09.2026 Backtest (2 yil, 28 coin, egitim/test): eski ve market/24s strateji eksi beklenti. Canli strateji -> limit giris (12s) + R:R>=2.5 + 72s + BTC/BIST100 rejim filtresi (egitim +0.12R, test +0.11R). Fonlama orani denendi: testte kotulestirdi, eklenmedi. On-chain agirligi veri yoksa dagitiliyor; likidite filtresi 20M$. tests/ (20 test) + tests.yml. Sonuclar: tracking/backtest.md, tracking/backtest_funding.md

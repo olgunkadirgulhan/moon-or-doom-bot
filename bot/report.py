@@ -53,12 +53,17 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
         fixed, b_longs, b_shorts, t_failed = [], [], [], [f"Altın/Gümüş/BIST ({e})"]
 
     everything = longs + shorts + fixed + b_longs + b_shorts
-    cands = strategy.select(everything, cfg)
+    try:
+        regs = await scanner.regimes(fixed)
+    except Exception:  # noqa: BLE001 — rejim bilinmiyorsa filtre uygulanmaz
+        log.exception("rejim hesaplanamadı")
+        regs = {}
+    cands = strategy.select(everything, cfg, regs)
     for c in cands:
         c["candidate"] = True
-    tracker.record(everything)
+    tracker.record(everything, cfg["entry_mode"])
 
-    await send_candidates(bot, chat_id, cands, cfg)
+    await send_candidates(bot, chat_id, cands, cfg, regs)
 
     tables = [
         (longs, f"🟢 KRİPTO LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · Kripto LONG", "Coin"),
@@ -93,7 +98,9 @@ def calc_link(cfg: dict, r: dict | None = None) -> str:
     """Hesaplayıcı adresi; aday verilirse seviyeleri önceden doldurur."""
     if not r:
         return cfg["calc_url"]
+    limit = cfg["entry_mode"] == "limit" and r["entry"] != r["price"]
     params = {"side": r["side"], "sym": r.get("name") or r["symbol"], "lev": f"{cfg['leverage']:g}",
+              "mode": "limit" if limit else "market", "hz": cfg["horizon_h"],
               **{k: f"{r[k]:.10g}" for k in ("entry", "sl", "tp1", "tp2")}}
     return f"{cfg['calc_url']}?{urlencode(params)}"
 
@@ -115,13 +122,20 @@ async def set_calc_menu(bot: Bot, chat_id: int, cfg: dict) -> None:
         log.exception("menü butonu ayarlanamadı")
 
 
-async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict) -> None:
+REGIME_TEXT = {"up": "📈 yükseliş (sadece long)", "down": "📉 düşüş (sadece short)", "neutral": "↔️ yatay (iki yön)"}
+
+
+async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict, regs: dict | None = None) -> None:
+    reg_line = ""
+    if regs and cfg.get("regime_filter"):
+        reg_line = "\nPiyasa rejimi: " + " · ".join(
+            f"{name} {REGIME_TEXT[regs[k]]}" for k, name in (("crypto", "BTC"), ("bist", "BIST100")) if k in regs)
     if not cands:
         await bot.send_message(
             chat_id,
             "🎯 İŞLEM ADAYI YOK — bu raporda strateji kurallarının hepsini geçen işlem çıkmadı.\n"
-            f"(AL/SAT sinyali + R:R ≥ {cfg['cand_min_rr']:g} + stop likidasyondan güvenli uzaklıkta)\n"
-            "Beklemek de bir pozisyondur; aşağıdaki tablolar sadece bilgi içindir.",
+            f"(AL/SAT sinyali + R:R ≥ {cfg['cand_min_rr']:g} + stop likidasyondan güvenli uzaklıkta + trend yönünde)"
+            f"{reg_line}\nBeklemek de bir pozisyondur; aşağıdaki tablolar sadece bilgi içindir.",
             reply_markup=calc_buttons(cfg, []))
         return
     png = await asyncio.to_thread(chart.candidates_table, cands, cfg, "Moon or Doom — İşlem Adayları")
@@ -129,9 +143,11 @@ async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict) 
     await bot.send_photo(
         chat_id, png, write_timeout=SEND_TIMEOUT, reply_markup=calc_buttons(cfg, cands),
         caption=f"🎯 İŞLEM ADAYLARI — kuralların hepsini geçen {len(cands)} işlem (en güçlüsü üstte). "
-                f"Her biri en fazla {risk:,.0f} $ risk (%{cfg['risk_pct']:g}). Önce 100 işlem sanal takip! "
+                f"Her biri en fazla {risk:,.0f} $ risk (%{cfg['risk_pct']:g}). "
+                + ("Girişler LİMİT emir: 12 saat içinde dolmazsa iptal et. " if cfg["entry_mode"] == "limit" else "")
+                + f"İşlem en fazla {cfg['horizon_h']} saat tutulur. Önce 100 işlem sanal takip! "
                 "Aşağıdaki butonla kendi sermayene göre hesapla."
-                .replace(",", "."))
+                .replace(",", ".") + reg_line)
 
 
 async def send_result(bot: Bot, chat_id: int, period: str) -> None:

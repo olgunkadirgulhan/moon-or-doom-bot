@@ -96,7 +96,38 @@ def _plan(side: str, price: float, supports: list, resistances: list, atr: float
     return {"entry": entry, "sl": sl, "tp1": tp1, "tp2": tp2, "rr": rr}
 
 
-def evaluate(symbol: str, frames: dict, levels_by_tf: dict, onchain: dict, cfg: dict) -> dict:
+def _plan_limit(side: str, price: float, supports: list, resistances: list, atr: float) -> dict:
+    """Limit giriş: long en yakın güçlü destekte, short en yakın güçlü dirençte beklenir (fiyata <0.3 ATR ise fiyattan)."""
+    if side == "long":
+        anchor = _nearest(supports, price, below=True)
+        level = anchor[0] if anchor else price - atr
+        entry = price if price - level < 0.3 * atr else level
+        sl = level - atr
+        targets = [l[0] for l in resistances if l[0] > entry + MIN_TARGET_ATR * atr]
+        tp1 = targets[0] if targets else entry + 2 * atr
+        tp2 = targets[1] if len(targets) > 1 else max(tp1 + atr, entry + 3.5 * atr)
+        rr = (tp1 - entry) / (entry - sl)
+    else:
+        anchor = _nearest(resistances, price, below=False)
+        level = anchor[0] if anchor else price + atr
+        entry = price if level - price < 0.3 * atr else level
+        sl = level + atr
+        targets = [l[0] for l in reversed(supports) if l[0] < entry - MIN_TARGET_ATR * atr]
+        tp1 = targets[0] if targets else entry - 2 * atr
+        tp2 = targets[1] if len(targets) > 1 else min(tp1 - atr, entry - 3.5 * atr)
+        rr = (entry - tp1) / (sl - entry)
+    return {"entry": entry, "sl": sl, "tp1": tp1, "tp2": tp2, "rr": rr}
+
+
+def raw_score(components: dict, weights: dict, onchain_available: bool) -> float:
+    """50 + 50 × ağırlıklı ortalama; on-chain verisi yoksa onun ağırlığı diğerlerine dağılır (skor sıkışmasın)."""
+    active = {k: w for k, w in weights.items() if k in components and (k != "onchain" or onchain_available)}
+    total = sum(active.values()) or 1
+    return 50 + 50 * sum(w * components[k] for k, w in active.items()) / total
+
+
+def features(frames: dict, levels_by_tf: dict) -> dict:
+    """Fiyat, ATR, birleşik seviyeler ve teknik bileşenler (on-chain hariç) — canlı ve backtest ortak."""
     price = float(frames["1h"]["Close"].iloc[-1])
     atr = last_atr(frames["4h"])
     tol = 0.5 * atr
@@ -109,25 +140,33 @@ def evaluate(symbol: str, frames: dict, levels_by_tf: dict, onchain: dict, cfg: 
     near_res = _clip(1 - (res[0] - price) / atr, 0, 1) if res else 0.0
     conf_sup = 1.0 if sup and sup[2] >= 2 else 0.0
     conf_res = 1.0 if res and res[2] >= 2 else 0.0
-
-    components = {
-        "trend": _trend(frames),
-        "proximity": near_sup - near_res,
-        "rsi": _rsi(frames),
-        "confluence": conf_sup - conf_res,
-        "onchain": _clip(onchain.get("score", 0) / 100),
+    return {
+        "price": price, "atr": atr, "supports": supports, "resistances": resistances,
+        "components": {
+            "trend": _trend(frames),
+            "proximity": near_sup - near_res,
+            "rsi": _rsi(frames),
+            "confluence": conf_sup - conf_res,
+        },
     }
-    w = cfg["weights"]
-    total_w = sum(w.values()) or 1
-    raw = 50 + 50 * sum(w[k] * v for k, v in components.items()) / total_w
+
+
+def evaluate(symbol: str, frames: dict, levels_by_tf: dict, onchain: dict, cfg: dict) -> dict:
+    f = features(frames, levels_by_tf)
+    price, atr, supports, resistances = f["price"], f["atr"], f["supports"], f["resistances"]
+    components = {**f["components"], "onchain": _clip(onchain.get("score", 0) / 100)}
+    oc_ok = bool(onchain.get("available"))
+    raw = raw_score(components, cfg["weights"], oc_ok)
+    plan_fn = _plan_limit if cfg.get("entry_mode") == "limit" else _plan
 
     base = {
         "symbol": symbol,
         "price": price,
         "atr": atr,
         "raw_score": raw,
+        "onchain_available": oc_ok,
         "components": {k: round(v, 2) for k, v in components.items()},
-        "plans": {s: _plan(s, price, supports, resistances, atr) for s in ("long", "short")},
+        "plans": {s: plan_fn(s, price, supports, resistances, atr) for s in ("long", "short")},
     }
     return with_side(base, "long" if raw >= 50 else "short", cfg)
 
