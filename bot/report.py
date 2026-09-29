@@ -44,8 +44,8 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     longs, shorts, failed = await scanner.scan()
     tracker.record(longs + shorts)
     tables = [
-        (longs, f"🟢 LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · LONG"),
-        (shorts, f"🔴 SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", f"{title} · SHORT"),
+        (longs, f"🟢 KRİPTO LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · Kripto LONG"),
+        (shorts, f"🔴 KRİPTO SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", f"{title} · Kripto SHORT"),
     ]
     for rows, note, table_title in tables:
         png = await asyncio.to_thread(chart.summary_table, rows, f"Moon or Doom — {table_title}",
@@ -78,18 +78,17 @@ async def send_tradfi(bot: Bot, chat_id: int, title: str) -> None:
     tracker.record(fixed + longs + shorts)
     margin, lev = settings.get("margin_usd"), settings.get("leverage")
     tables = [
-        (fixed, f"🥇 Altın · Gümüş · Endeks — {title}", "Altın · Gümüş · Endeks"),
-        (longs, f"🟢 BIST100 LONG — en güçlü {len(longs)}", "BIST100 · LONG"),
-        (shorts, f"🔴 BIST100 SHORT — en güçlü {len(shorts)}", "BIST100 · SHORT"),
+        (fixed, f"🥇 ALTIN · GÜMÜŞ · ENDEKS — sabit liste ({len(fixed)}): gram altın/gümüş ₺ ve $, altın ons, "
+                "BIST 100, BIST 30", "Altın · Gümüş · Endeks"),
+        (longs, f"🟢 BIST100 LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", "BIST100 · LONG"),
+        (shorts, f"🔴 BIST100 SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", "BIST100 · SHORT"),
     ]
-    media = []
+    # tek tek gönder: albümde birden çok açıklama olunca Telegram sohbette hiçbirini göstermiyor
     for rows, note, table_title in tables:
         if not rows:
             continue
         png = await asyncio.to_thread(chart.summary_table, rows, f"Moon or Doom — {table_title}", margin, lev, "Varlık")
-        media.append(InputMediaPhoto(png, caption=note))
-    if media:
-        await bot.send_media_group(chat_id, media, write_timeout=SEND_TIMEOUT)
+        await bot.send_photo(chat_id, png, caption=note, write_timeout=SEND_TIMEOUT)
     if failed:
         await bot.send_message(chat_id, f"Veri alınamadı: {', '.join(failed)}")
 
