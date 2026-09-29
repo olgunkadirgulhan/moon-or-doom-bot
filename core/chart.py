@@ -265,9 +265,9 @@ def result_chart(summary: dict, title: str) -> bytes:
     """Dönem isabeti: genel pasta, grup bazlı çubuklar, gün gün doğruluk çizgisi, en iyi/kötü tahminler."""
     o = summary["overall"]
     with _lock:
-        fig = plt.figure(figsize=(16, 11), dpi=100, facecolor=BG)
-        gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.5], hspace=0.35, wspace=0.2,
-                              left=0.05, right=0.97, top=0.88, bottom=0.06)
+        fig = plt.figure(figsize=(16, 16), dpi=100, facecolor=BG)
+        gs = fig.add_gridspec(3, 2, width_ratios=[1, 1.5], hspace=0.38, wspace=0.2,
+                              left=0.05, right=0.97, top=0.92, bottom=0.04)
 
         # 1) genel dağılım
         ax = fig.add_subplot(gs[0, 0])
@@ -298,7 +298,8 @@ def result_chart(summary: dict, title: str) -> bytes:
             ax.text(s["total"], yi, f"  {_acc_text(s)}  ({s['tp']}/{s['tp'] + s['sl']})",
                     color=TEXT, va="center", fontsize=11)
         ax.set_xlim(0, max([s["total"] for s in g] + [1]) * 1.3)
-        ax.legend(facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT, loc="lower right")
+        ax.legend(facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT, loc="upper center",
+                  bbox_to_anchor=(0.5, -0.07), ncol=3)
         ax.set_title("Gruplara göre sonuç (doğruluk = hedef ÷ (hedef + stop))", color=TEXT, fontsize=12, loc="left")
 
         # 3) gün gün doğruluk
@@ -335,8 +336,130 @@ def result_chart(summary: dict, title: str) -> bytes:
         ax.text(0.52, 0.9, "\n".join(map(line, worst)) or "—", color=TEXT, fontsize=9.5,
                 va="top", family="monospace")
 
-        fig.suptitle(title, color=TEXT, fontsize=20, fontweight="bold")
-        fig.text(0.5, 0.925, f"{o['total']} tahmin · {summary['coins']} farklı varlık · her tahmin 24 saat "
+        _draw_account(fig.add_subplot(gs[2, 0]), fig.add_subplot(gs[2, 1]), summary["account"])
+
+        fig.suptitle(title, color=TEXT, fontsize=20, fontweight="bold", y=0.985)
+        fig.text(0.5, 0.95, f"{o['total']} tahmin · {summary['coins']} farklı varlık · her tahmin 24 saat "
                  "izlendi: önce TP1 ✓, önce SL ✗, hiçbiri açık",
                  color=TEXT, ha="center", fontsize=11)
+        return _png(fig)
+
+
+def _draw_account(ax_curve, ax_text, a: dict) -> None:
+    """Sanal hesap: sermaye eğrisi + beklenti/düşüş özeti + gerçek paraya geçiş kontrol listesi."""
+    _style_ax(ax_curve)
+    start = a["capital"]
+    if a["curve"]:
+        xs = [datetime.fromtimestamp(ts, TZ) for ts, _ in a["curve"]]
+        ys = [eq for _, eq in a["curve"]]
+        ax_curve.plot([xs[0]] + xs, [start] + ys, color=GREEN if ys[-1] >= start else RED, lw=2, drawstyle="steps-post")
+        ax_curve.axhline(start, color=GRID, ls="--", lw=1)
+        ax_curve.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%d.%m", tz=TZ))
+        ax_curve.tick_params(axis="x", labelrotation=45)
+        ax_curve.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:,.0f} $".replace(",", ".")))
+    else:
+        ax_curve.text(0.5, 0.5, "Henüz sonuçlanmış işlem adayı yok\n(adaylar 24 saat sonra sonuçlanır)",
+                      color=TEXT, ha="center", va="center", transform=ax_curve.transAxes)
+    start_txt = f"{start:,.0f}".replace(",", ".")
+    ax_curve.set_title(f"Sanal hesap — başlangıçtan beri ({start_txt} $, işlem başı %{a['risk_pct']:g} risk)",
+                       color=TEXT, fontsize=12, loc="left")
+
+    ax_text.set_facecolor(BG)
+    ax_text.axis("off")
+    fmt = lambda v, f: "—" if v is None else f.format(v)  # noqa: E731
+    change = 100 * (a["equity"] / start - 1)
+    rows = [
+        ("Sermaye", f"{a['equity']:,.2f} $".replace(",", "X").replace(".", ",").replace("X", ".")
+         + f"  ({change:+.1f}%)", GREEN if change >= 0 else RED),
+        ("İşlem sayısı", f"{a['trades']}  (bekleyen {a['pending']})", TEXT),
+        ("Kazanma oranı", fmt(a["win_rate"], "%{:.0f}"), TEXT),
+        ("Beklenti / işlem", fmt(a["expectancy"], "{:+.2f} R"),
+         TEXT if a["expectancy"] is None else GREEN if a["expectancy"] > 0 else RED),
+        ("Toplam", f"{a['total_r']:+.1f} R", GREEN if a["total_r"] >= 0 else RED),
+        ("En büyük düşüş", f"%{a['max_dd']:.1f}", RED if a["max_dd"] >= 15 else TEXT),
+        ("En uzun kayıp serisi", str(a["worst_streak"]), TEXT),
+    ]
+    y = 0.92
+    for label, value, color in rows:
+        ax_text.text(0.0, y, label, color=TEXT, fontsize=12, va="top", transform=ax_text.transAxes)
+        ax_text.text(0.30, y, value, color=color, fontsize=12, va="top", fontweight="bold", transform=ax_text.transAxes)
+        y -= 0.115
+
+    g = a["gate"]
+    checks = [
+        (g["n"], f"En az 100 işlem  ({a['trades']}/100)"),
+        (g["expectancy"], "Beklenti > +0.20 R (komisyon dahil)"),
+        (g["dd"], "En büyük düşüş < %15"),
+    ]
+    ax_text.text(0.60, 0.92, "Gerçek paraya geçiş şartları", color=TEXT, fontsize=12, fontweight="bold",
+                 va="top", transform=ax_text.transAxes)
+    y = 0.80
+    for ok, label in checks:
+        ax_text.text(0.60, y, ("✓ " if ok else "✗ ") + label, color=GREEN if ok else RED, fontsize=11,
+                     va="top", transform=ax_text.transAxes)
+        y -= 0.1
+    verdict = ("✓ Şartlar sağlandı:\n%0.5 riskle küçük başlanabilir" if all(g.values())
+               else "✗ Henüz gerçek para yok:\nsanal takibe devam")
+    ax_text.text(0.60, y - 0.05, verdict, color=GREEN if all(g.values()) else YELLOW, fontsize=12,
+                 fontweight="bold", va="top", transform=ax_text.transAxes)
+    ax_text.text(0.60, y - 0.3, "Kurallar: TP1'de yarısı kapanır, stop girişe çekilir;\n"
+                 "kalan TP2'de ya da 24 saat sonunda kapanır.", color=TEXT, fontsize=9.5, va="top",
+                 transform=ax_text.transAxes)
+    ax_text.set_title("Sanal hesap özeti", color=TEXT, fontsize=12, loc="left")
+
+
+def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
+    """Strateji kurallarını geçen işlem adayları + %risk'e göre pozisyon büyüklüğü."""
+    usd = lambda v: f"{v:,.0f}".replace(",", ".") + " $"  # noqa: E731
+    market = {"crypto": "Kripto", "tradfi": "Emtia/Endeks", "bist": "BIST"}
+    headers = ["#", "Varlık", "Pazar", "Yön", "Sinyal", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R",
+               "Stop %", "Pozisyon", f"Teminat ({cfg['leverage']:g}x)", "Risk", "TP1 kazanç", "TP2 kazanç"]
+    rows = [[
+        str(i), r.get("name") or r["symbol"], market.get(r.get("market"), "Kripto"), side_label(r), r["signal"],
+        f"{r['score']:.0f}", fmt_price(r["entry"]), fmt_price(r["sl"]), fmt_price(r["tp1"]), fmt_price(r["tp2"]),
+        f"{r['rr']:.1f}", f"%{r['stop_pct']:.1f}", usd(r["position_usd"]), usd(r["margin_usd"]),
+        "−" + usd(r["risk_usd"]), "+" + usd(r["tp1_usd"] / 2), "+" + usd(r["tp2_usd"] / 2),
+    ] for i, r in enumerate(cands, 1)]
+
+    with _lock:
+        footer_h = 1.25
+        height = 1.1 + 0.36 * (len(rows) + 1) + footer_h
+        fig = plt.figure(figsize=(20, height), dpi=100, facecolor=BG)
+        ax = fig.add_axes([0.01, footer_h / height, 0.98, 1 - (0.95 + footer_h) / height])
+        ax.axis("off")
+        widths = [0.025, 0.08, 0.06, 0.045, 0.045, 0.035, 0.07, 0.07, 0.07, 0.07, 0.035,
+                  0.045, 0.06, 0.07, 0.05, 0.06, 0.06]
+        widths = [w / sum(widths) for w in widths]
+        tbl = ax.table(cellText=rows, colLabels=headers, loc="upper center", cellLoc="center", colWidths=widths)
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(12)
+        tbl.scale(1, 2.0)
+        for (row, col), cell in tbl.get_celld().items():
+            cell.set_edgecolor(GRID)
+            cell.set_text_props(color=TEXT)
+            if row == 0:
+                cell.set_facecolor("#232937")
+                cell.set_text_props(color=TEXT, fontweight="bold")
+                continue
+            cell.set_facecolor(PANEL if row % 2 else "#1b202a")
+            r = cands[row - 1]
+            if col in (3, 4):
+                cell.set_text_props(color=GREEN if r["side"] == "long" else RED, fontweight="bold")
+            elif col == 14:
+                cell.set_text_props(color=RED, fontweight="bold")
+            elif col in (15, 16):
+                cell.set_text_props(color=GREEN, fontweight="bold")
+        fig.text(0.5, 1 - 0.55 / height, f"{title}  ·  {datetime.now(TZ):%d.%m.%Y %H:%M} (İstanbul)",
+                 color=TEXT, ha="center", va="center", fontsize=15, fontweight="bold")
+        risk = cfg["capital_usd"] * cfg["risk_pct"] / 100
+        fig.text(0.012, (footer_h - 0.12) / height, "\n".join([
+            f"Pozisyon büyüklüğü: sermaye {usd(cfg['capital_usd'])} × %{cfg['risk_pct']:g} risk = işlem başı en fazla "
+            f"{usd(risk)} kayıp. Pozisyon = risk ÷ stop mesafesi; teminat = pozisyon ÷ {cfg['leverage']:g}x. "
+            "Kaldıraç riski değil, sadece bağlanan teminatı değiştirir.",
+            "Yönetim: stopu girişle birlikte koy · TP1'de yarısını kapat, stopu girişe çek · kalanı TP2'de ya da "
+            "24 saat sonunda kapat · stop asla uzaklaştırılmaz.",
+            "TP1/TP2 kazanç = pozisyonun yarısının o hedefteki kârı. Kurallar: AL/SAT sinyali, R:R ≥ "
+            f"{cfg['cand_min_rr']:g}, stop likidasyonun yarısından yakın, en fazla {cfg['max_open']} işlem. "
+            "Komisyon hariç. Yatırım tavsiyesi değildir.",
+        ]), color=TEXT, fontsize=11, va="top", ha="left", linespacing=1.6, parse_math=False)
         return _png(fig)

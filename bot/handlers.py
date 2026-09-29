@@ -19,7 +19,8 @@ HELP = (
     "/settings — ayarları göster\n"
     "/settings <anahtar> <değer> — ayar değiştir\n"
     "   ör: buy_threshold 70 · min_rr 2 · report_hours 0,6,12,18\n"
-    "       weights.onchain 10 · alerts on · top_n 12 · charts on\n\n"
+    "       weights.onchain 10 · alerts on · top_n 12 · charts on\n"
+    "   strateji: capital_usd 1000 · risk_pct 1 · cand_min_rr 2 · max_open 3\n\n"
     "⚠️ Yatırım tavsiyesi değildir; bot emir göndermez."
 )
 

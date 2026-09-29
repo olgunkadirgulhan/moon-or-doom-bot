@@ -11,6 +11,12 @@ DEFAULTS = {
     "report_hours": [3, 7, 11, 15, 19, 23],
     "margin_usd": 1000,
     "leverage": 10,
+    # strateji: işlem adayları ve sanal hesap
+    "capital_usd": 1000,
+    "risk_pct": 1.0,
+    "cand_min_rr": 2.0,
+    "max_open": 3,
+    "max_same_dir_crypto": 2,
     "result_hour": 20,
     "top_n": 10,
     "universe_size": 40,
