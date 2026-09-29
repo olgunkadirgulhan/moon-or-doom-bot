@@ -258,6 +258,74 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
         return _png(fig)
 
 
+def _score_color(score: float, side: str) -> str:
+    """Güç hücresi rengi: yönünde güçlüyse koyu yeşil/kırmızı, nötre yakınsa gri."""
+    strength = (score - 50) / 50 if side == "long" else (50 - score) / 50  # 0…1 yönünde güç
+    if strength >= 0.3:
+        return "#1f5f4a" if side == "long" else "#6b2626"
+    if strength >= 0.1:
+        return "#264a40" if side == "long" else "#4d2a2a"
+    return "#2a2f3a"
+
+
+def board(sections: list[tuple[str, list[dict]]], title: str) -> bytes:
+    """Tek resimde piyasa panosu: her bölüm (ör. ALIŞ, SATIŞ) ayrı tablo, satırlar güçlüden zayıfa.
+    Satır: name, market_label, side, score, price, entry, sl, tp1, tp2, rr, status, ok (fırsat mı)."""
+    headers = ["#", "Varlık", "Pazar", "Güç\n(100 üz.)", "Fiyat", "Emir\nfiyatı", "Zarar-kes\n(stop)",
+               "Hedef 1", "Hedef 2", "Kazanç/\nrisk", "Durum"]
+    widths = [0.03, 0.12, 0.08, 0.06, 0.09, 0.09, 0.09, 0.09, 0.09, 0.06, 0.2]
+    fp = fmt_price_tr
+    row_h, head_h, gap = 0.34, 0.62, 0.75
+    height = 1.0 + sum(gap + head_h + row_h * max(1, len(rows)) for _, rows in sections) + 0.5
+    with _lock:
+        fig = plt.figure(figsize=(18, height), dpi=100, facecolor=BG)
+        fig.text(0.5, 1 - 0.45 / height, f"{title}  ·  {datetime.now(TZ):%d.%m.%Y %H:%M} (İstanbul)",
+                 color=TEXT, ha="center", va="center", fontsize=17, fontweight="bold")
+        y = height - 1.0
+        for label, rows in sections:
+            color = GREEN if "ALIŞ" in label else RED
+            fig.text(0.012, (y - 0.35) / height, label, color=color, fontsize=15, fontweight="bold", va="center")
+            y -= gap
+            h = head_h + row_h * max(1, len(rows))
+            ax = fig.add_axes([0.01, (y - h) / height, 0.98, h / height])
+            ax.axis("off")
+            y -= h
+            if not rows:
+                ax.text(0.5, 0.5, "Bu yönde gösterilecek varlık yok", color=TEXT, ha="center", va="center",
+                        fontsize=12, transform=ax.transAxes)
+                continue
+            cells = [[str(i), r["name"], r["market_label"], f"{r['score']:.0f}", fp(r["price"]), fp(r["entry"]),
+                      fp(r["sl"]), fp(r["tp1"]), fp(r["tp2"]), f"{r['rr']:.1f}".replace(".", ","), r["status"]]
+                     for i, r in enumerate(rows, 1)]
+            tbl = ax.table(cellText=cells, colLabels=headers, loc="upper center", cellLoc="center",
+                           colWidths=widths, bbox=[0, 0, 1, 1])
+            tbl.auto_set_font_size(False)
+            tbl.set_fontsize(12)
+            for (ri, ci), cell in tbl.get_celld().items():
+                cell.set_edgecolor(GRID)
+                cell.set_text_props(color=TEXT)
+                if ri == 0:
+                    cell.set_facecolor("#232937")
+                    cell.set_text_props(color=TEXT, fontweight="bold", fontsize=10.5)
+                    continue
+                r = rows[ri - 1]
+                cell.set_facecolor("#1d3a2c" if r["ok"] else (PANEL if ri % 2 else "#1b202a"))
+                if ci == 1:
+                    cell.set_text_props(fontweight="bold")
+                elif ci == 3:
+                    cell.set_facecolor(_score_color(r["score"], r["side"]))
+                    cell.set_text_props(fontweight="bold")
+                elif ci == 9:
+                    cell.set_text_props(color=GREEN if r["rr"] >= 2.5 else ORANGE)
+                elif ci == 10:
+                    cell.set_text_props(color=GREEN if r["ok"] else "#9aa3b2", fontweight="bold" if r["ok"] else "normal")
+        fig.text(0.012, 0.25 / height,
+                 "Güç: 65+ güçlü alış, 35 altı güçlü satış işareti · Emir fiyatı: limit emir (12 saat geçerli) · "
+                 "Hedef 1'de yarısını kapat, zarar-kesi girişe taşı · en fazla 3 gün tut · ✓ FIRSAT (yeşil satır) = tüm kurallara uyuyor",
+                 color=TEXT, fontsize=10.5, va="center", parse_math=False)
+        return _png(fig)
+
+
 def _style_ax(ax) -> None:
     ax.set_facecolor(PANEL)
     ax.tick_params(colors=TEXT)

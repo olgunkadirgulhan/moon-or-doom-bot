@@ -80,15 +80,17 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
 
     await send_summary(bot, chat_id, cfg, regs, pos, cands, title)
     try:
-        await market_map.send(bot, chat_id, cfg, regs, scanner.LAST_ALL, fixed, active, with_charts=tables_due(cfg))
-    except Exception:  # noqa: BLE001 — harita hatası raporu durdurmasın
-        log.exception("piyasa haritası hatası")
+        ranked = {"crypto_long": longs, "crypto_short": shorts, "bist_long": b_longs, "bist_short": b_shorts}
+        await market_map.send_board(bot, chat_id, cfg, regs, scanner.LAST_ALL, fixed, ranked, cands, active,
+                                    with_charts=tables_due(cfg))
+    except Exception:  # noqa: BLE001 — pano hatası raporu durdurmasın
+        log.exception("piyasa panosu hatası")
     if cands:
         await send_candidates(bot, chat_id, cands, cfg, regs)
+    if failed or t_failed:
+        log.warning("veri alınamadı: %s", failed + t_failed)
 
-    if not tables_due(cfg):
-        if failed or t_failed:
-            log.warning("veri alınamadı: %s", failed + t_failed)
+    if not (cfg["legacy_tables"] and tables_due(cfg)):
         return
     tables = [
         (longs, f"🟢 KRİPTO LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · Kripto LONG", "Coin"),
@@ -155,7 +157,8 @@ async def send_summary(bot: Bot, chat_id: int, cfg: dict, regs: dict, pos: list[
     else:
         lines.append(f"\n💼 Deneme hesabı: henüz kapanmış işlem yok (her işlemde en fazla {risk} risk).")
     if not tables_due(cfg):
-        lines.append(f"<i>Piyasa tabloları {' ve '.join(f'{h:02d}:00' for h in cfg['table_hours'])} raporlarında gelir.</i>")
+        lines.append(f"<i>Önemli piyasaların grafikleri {' ve '.join(f'{h:02d}:00' for h in cfg['table_hours'])} "
+                     "raporlarında gelir.</i>")
     await bot.send_message(chat_id, "\n".join(lines), parse_mode=ParseMode.HTML, reply_markup=calc_buttons(cfg, []))
 
 
@@ -223,8 +226,9 @@ def candidate_text(i: int, r: dict, cfg: dict) -> str:
 
 
 async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict, regs: dict | None = None) -> None:
-    """Önce kopyalanabilir metin (Telegram 4096 karakter sınırına göre bölünür), sonra tablo resmi + hesaplama butonları."""
-    head = (f"🎯 <b>İŞLEM FIRSATLARI ({len(cands)})</b> — en güçlüsü üstte. Hepsi kurallara uyuyor, "
+    """Kopyalanabilir metin (Telegram 4096 karakter sınırına göre bölünür); son parçanın altında hesaplama butonları.
+    Tablo görünümü piyasa panosunda (yeşil satırlar)."""
+    head = (f"🎯 <b>İŞLEM FIRSATLARI ({len(cands)})</b> — panodaki yeşil satırların ayrıntısı. Hepsi kurallara uyuyor, "
             f"hangisine gireceğine sen karar ver (önerimiz aynı anda en fazla {cfg['max_open']} işlem).\n"
             "Rakamların üstüne dokununca kopyalanır.")
     chunks, cur = [], head
@@ -236,11 +240,10 @@ async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict, 
         else:
             cur += "\n\n" + block
     chunks.append(cur)
-    for c in chunks:
-        await bot.send_message(chat_id, c, parse_mode=ParseMode.HTML)
-    png = await asyncio.to_thread(chart.candidates_table, cands, cfg, "Moon or Doom — İşlem Fırsatları")
-    await bot.send_photo(chat_id, png, write_timeout=SEND_TIMEOUT, reply_markup=calc_buttons(cfg, cands),
-                         caption="📋 Aynı fırsatlar tablo halinde. Kendi sermayene göre hesaplamak için butona dokun.")
+    for i, c in enumerate(chunks):
+        last = i == len(chunks) - 1
+        await bot.send_message(chat_id, c, parse_mode=ParseMode.HTML,
+                               reply_markup=calc_buttons(cfg, cands) if last else None)
 
 
 async def send_result(bot: Bot, chat_id: int, period: str) -> None:

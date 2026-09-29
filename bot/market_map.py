@@ -1,4 +1,4 @@
-"""Piyasa haritası: önemli varlıklar için destek/direnç bölgeleri, hazır işlem planı ve "neden şu an işlem yok".
+﻿"""Piyasa haritası: önemli varlıklar için destek/direnç bölgeleri, hazır işlem planı ve "neden şu an işlem yok".
 
 Aday olmasa bile kullanıcı "nerede alınır, nerede satılır" sorusunun cevabını görsün diye her raporda gönderilir.
 """
@@ -105,6 +105,84 @@ def card(res: dict, cfg: dict, regs: dict, active_keys: set) -> str:
             + f"kazanç/risk {r['rr']:.1f}".replace(".", ","))
         lines.append(esc(_why_not(r, cfg, regs, active_keys)))
     return "\n".join(lines)
+
+
+SHORT_STATUS = {None: "✓ FIRSAT", "BEKLE": "Güç yetersiz", "R:R düşük": "Kazanç/risk düşük",
+                "stop likidasyona yakın": "Zarar-kes çok uzak", "BIST kapalı": "Borsa kapalı"}
+MARKET_LABEL = {"crypto": "Kripto", "tradfi": "Emtia/Endeks", "bist": "BIST"}
+
+
+def plan_side(res: dict, regs: dict) -> str:
+    """Varlığın gösterilecek yönü: kripto/hisse piyasa rejimine, diğerleri kendi günlük trendine/skoruna göre."""
+    reg = regs.get("crypto") if res.get("market") == "crypto" else regs.get("bist") if res.get("market") == "bist" \
+        or res["symbol"] == "BIST100" else None
+    reg = reg or strategy.regime(res["frames"]["1d"])
+    return {"up": "long", "down": "short"}.get(reg, "long" if res["raw_score"] >= 50 else "short")
+
+
+def board_rows(items: list[dict], cfg: dict, regs: dict, cand_keys: set, active_keys: set) -> list[dict]:
+    rows = []
+    for r in items:
+        key = (r.get("market"), r["symbol"])
+        if key in active_keys:
+            status = "Takipte (işlem var)"
+        elif key in cand_keys:
+            status = "✓ FIRSAT"
+        else:
+            reason = strategy.rejection(r, cfg, regs)
+            status = SHORT_STATUS.get(reason, "Trende ters") if reason else "Kurala uygun"
+        rows.append({"name": (r.get("name") or r["symbol"])[:14], "market_label": MARKET_LABEL.get(r.get("market"), ""),
+                     "side": r["side"], "score": r["score"], "price": r["price"], "entry": r["entry"], "sl": r["sl"],
+                     "tp1": r["tp1"], "tp2": r["tp2"], "rr": r["rr"], "status": status, "ok": key in cand_keys})
+    return rows
+
+
+async def send_board(bot: Bot, chat_id: int, cfg: dict, regs: dict, crypto_all: dict, fixed: list[dict],
+                     ranked: dict[str, list[dict]], cands: list[dict], active: list[dict], with_charts: bool,
+                     send_timeout: int = 120) -> None:
+    """Tek resim: ALIŞ bölümü sonra SATIŞ bölümü (fırsatlar en üstte, sonra güce göre)."""
+    cand_keys = {(c.get("market"), c["symbol"]) for c in cands}
+    active_keys = {(p["market"], p["symbol"]) for p in active}
+    picked: dict[tuple, dict] = {}
+
+    def add(r):
+        picked.setdefault((r.get("market"), r["symbol"], r["side"]), r)
+
+    for c in cands:
+        add(c)
+    for k in cfg["key_assets"] + [r["symbol"] for r in fixed]:
+        a = find(k, crypto_all, fixed)
+        if a:
+            add(signal.with_side(a, plan_side(a, regs), cfg))
+    for name, n in (("crypto_long", 10), ("crypto_short", 10), ("bist_long", 5), ("bist_short", 5)):
+        for r in ranked.get(name, [])[:n]:
+            add(r)
+
+    def order(side):
+        rows = [r for r in picked.values() if r["side"] == side]
+        strength = (lambda r: -r["score"]) if side == "long" else (lambda r: r["score"])
+        return sorted(rows, key=lambda r: ((r.get("market"), r["symbol"]) not in cand_keys, strength(r)))
+
+    sections = [("▲ ALIŞ (long) — fiyat yükselirse kazanır · en güçlüsü üstte",
+                 board_rows(order("long"), cfg, regs, cand_keys, active_keys)),
+                ("▼ SATIŞ (short) — fiyat düşerse kazanır · en güçlüsü üstte",
+                 board_rows(order("short"), cfg, regs, cand_keys, active_keys))]
+    png = await asyncio.to_thread(chart.board, sections, "Moon or Doom — Piyasa Panosu")
+    regime_line = " · ".join(f"{n} {t}" for k, n in (("crypto", "BTC"), ("bist", "BIST100")) if (t := {
+        "up": "📈 yükselişte", "down": "📉 düşüşte", "neutral": "↔️ yatay"}.get(regs.get(k))))
+    await bot.send_photo(chat_id, png, write_timeout=send_timeout,
+                         caption=f"🗺️ Piyasa panosu · {regime_line}\n"
+                                 f"Yeşil satırlar kurallara uyan fırsatlar; ayrıntılı rakamlar ayrı mesajda.")
+    if with_charts:
+        for k in cfg["key_assets"]:
+            a = find(k, crypto_all, fixed)
+            if not a:
+                continue
+            r = signal.with_side(a, plan_side(a, regs), cfg)
+            png = await asyncio.to_thread(chart.coin_chart, {**r, "symbol": a.get("name") or a["symbol"]})
+            await bot.send_photo(chat_id, png, write_timeout=send_timeout,
+                                 caption=f"{a.get('name') or a['symbol']}: yeşil çizgiler destek, kırmızılar direnç; "
+                                         "kesikli çizgiler plan (mavi = emir, kırmızı = zarar-kes, yeşil = hedefler).")
 
 
 def find(key: str, crypto: dict, fixed: list[dict]) -> dict | None:
