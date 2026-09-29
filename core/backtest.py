@@ -144,7 +144,11 @@ def run_variant(snaps_by_ts: dict, regimes: dict, m15: dict, v: dict, base_cfg: 
     for T, snaps in snaps_by_ts.items():
         results = []
         for s in snaps:
-            raw = signal.raw_score({**s["components"], "onchain": 0.0}, cfg["weights"], cfg.get("old_norm", False))
+            comps = s["components"]
+            has_oc = "onchain" in comps  # geçmiş on-chain verisi enjekte edilmişse
+            if not has_oc:
+                comps = {**comps, "onchain": 0.0}
+            raw = signal.raw_score(comps, cfg["weights"], has_oc or cfg.get("old_norm", False))
             results.append({"symbol": s["symbol"], "name": s["symbol"], "market": "crypto", "price": s["price"],
                             "atr": s["atr"], "raw_score": raw, "components": s["components"], "plans": s[plans_key]})
         longs, shorts = scanner._rank(results, cfg)
@@ -235,15 +239,26 @@ def inject_funding(snaps: list[dict], funding: dict[str, pd.Series], lookback: i
     return added
 
 
-def focus_grid(weights: dict) -> list[dict]:
-    """Seçilen strateji ailesi × fonlama ağırlığı (0 = fonlamasız karşılaştırma)."""
+def focus_grid(weights: dict, key: str = "funding", label: str = "fonlama") -> list[dict]:
+    """Seçilen strateji ailesi × bir bileşenin ağırlığı (0 = o bileşen olmadan karşılaştırma)."""
     out = []
     for th in (65, 70):
         for fw in (0, 10, 20, 30):
-            out.append({"name": f"eşik {th}/{100 - th} · R:R≥2.5 · rejim · limit · 72s · fonlama {fw}",
+            out.append({"name": f"eşik {th}/{100 - th} · R:R≥2.5 · rejim · limit · 72s · {label} {fw}",
                         "regime_filter": True, "entry_mode": "limit", "horizon_h": 72, "buy_threshold": th,
-                        "sell_threshold": 100 - th, "cand_min_rr": 2.5, "weights": {**weights, "funding": fw}})
+                        "sell_threshold": 100 - th, "cand_min_rr": 2.5, "weights": {**weights, key: fw}})
     return out
+
+
+def inject_component(snaps: list[dict], name: str, values: dict[str, dict[int, float]]) -> int:
+    """values[symbol][ts] = bileşen değeri (−1…+1); olan anlık görüntülere eklenir."""
+    added = 0
+    for s in snaps:
+        v = values.get(s["symbol"], {}).get(s["ts"])
+        if v is not None and v == v:
+            s["components"] = {**s["components"], name: v}
+            added += 1
+    return added
 
 
 # ---------- ana akış ----------
