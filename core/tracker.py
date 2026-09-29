@@ -242,6 +242,57 @@ def find_fill(p: dict, candles: list[list], mode: str, fill_h: int = FILL_H) -> 
     return None
 
 
+def lifecycle(p: dict, candles: list[list], now: int, horizon: int) -> dict:
+    """Canlı işlem durumu (strateji kurallarıyla): PENDING → FILLED → TP1 (stop girişe) → TP2/SL/BE/TIME.
+    events: [(olay, zaman)], r: kapandıysa kesin, açıksa anlık (yarısı TP1'de alındıysa dahil) R."""
+    mode = p.get("mode", "market")
+    expiry = p["ts"] + FILL_H * 3600
+    fill = find_fill(p, candles, mode)
+    base = {"events": [], "r": 0.0, "last": p.get("price", p["entry"]), "fill_ts": fill, "expiry": expiry}
+    if fill is None:
+        if now < expiry:
+            return {**base, "state": "PENDING"}
+        return {**base, "state": "EXPIRED", "events": [("EXPIRED", expiry)]}
+
+    long = p["side"] == "long"
+    entry, risk = p["entry"], abs(p["entry"] - p["sl"])
+    move = lambda price: (price - entry) / risk * (1 if long else -1)  # noqa: E731
+    fee_r = (FEE_PCT / 100) * entry / risk if risk else 0.0
+    events = [("FILLED", fill)] if mode == "limit" and fill != p["ts"] else []
+    stop, half, r, last, end = p["sl"], False, 0.0, entry, fill + horizon
+
+    for t, _o, high, low, close, _v in candles:
+        ts = t // 1000
+        if ts < fill:
+            continue
+        if ts >= end or ts >= now:
+            break
+        last = close
+        hit_stop = low <= stop if long else high >= stop
+        hit_tp1 = high >= p["tp1"] if long else low <= p["tp1"]
+        hit_tp2 = high >= p["tp2"] if long else low <= p["tp2"]
+        if not half:
+            if hit_stop:
+                return {**base, "state": "SL", "events": events + [("SL", ts)], "r": -1 - fee_r, "last": p["sl"]}
+            if hit_tp1:
+                half, stop, r = True, entry, 0.5 * move(p["tp1"])
+                events.append(("TP1", ts))
+                if hit_tp2:
+                    return {**base, "state": "TP2", "events": events + [("TP2", ts)],
+                            "r": r + 0.5 * move(p["tp2"]) - fee_r, "last": p["tp2"]}
+        else:
+            if hit_stop:
+                return {**base, "state": "BE", "events": events + [("BE", ts)], "r": r - fee_r, "last": entry}
+            if hit_tp2:
+                return {**base, "state": "TP2", "events": events + [("TP2", ts)],
+                        "r": r + 0.5 * move(p["tp2"]) - fee_r, "last": p["tp2"]}
+
+    r_now = r + (0.5 if half else 1.0) * move(last)
+    if now >= end:
+        return {**base, "state": "TIME", "events": events + [("TIME", end)], "r": r_now - fee_r, "last": last}
+    return {**base, "state": "OPEN_BE" if half else "OPEN", "events": events, "r": r_now, "last": last, "end": end}
+
+
 def simulate_full(p: dict, candles: list[list], strat_h: int | None = None) -> dict:
     """İsabet (giriş sonrası 24s) + strateji R'si (giriş sonrası strat_h) — limit dolmadıysa NOFILL."""
     fill = find_fill(p, candles, p.get("mode", "market"))

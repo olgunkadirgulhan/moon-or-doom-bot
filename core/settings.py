@@ -9,6 +9,7 @@ DEFAULTS = {
     "min_rr": 1.5,
     "rr_penalty": 10,
     "report_hours": [3, 7, 11, 15, 19, 23],
+    "table_hours": [7, 19],  # bilgi tabloları (kripto/emtia/BIST sıralamaları) sadece bu raporlarda
     "margin_usd": 1000,
     "leverage": 10,
     # strateji: işlem adayları ve sanal hesap

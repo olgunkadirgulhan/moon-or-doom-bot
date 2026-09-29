@@ -77,6 +77,37 @@ class LimitFillTest(unittest.TestCase):
         self.assertEqual(tracker.find_fill(p, [], "market"), p["ts"])
 
 
+class LifecycleTest(unittest.TestCase):
+    P = {**LONG, "entry": 98.0, "sl": 93.0, "tp1": 108.0, "tp2": 118.0, "price": 100.0, "mode": "limit"}
+    H = 72 * 3600
+
+    def lc(self, candles, now_i):
+        return tracker.lifecycle(self.P, candles, T + now_i * 900, self.H)
+
+    def test_pending_then_expired(self):
+        cs = [candle(i, 101, 99, 100) for i in range(60)]
+        self.assertEqual(self.lc(cs[:4], 4)["state"], "PENDING")
+        out = self.lc(cs, 60)
+        self.assertEqual(out["state"], "EXPIRED")
+        self.assertEqual([e for e, _ in out["events"]], ["EXPIRED"])
+
+    def test_fill_tp1_then_open_with_stop_at_entry(self):
+        cs = [candle(0, 100, 99, 99.5), candle(1, 99, 97.5, 98.5), candle(2, 109, 99, 107)]
+        out = self.lc(cs, 3)
+        self.assertEqual(out["state"], "OPEN_BE")
+        self.assertEqual([e for e, _ in out["events"]], ["FILLED", "TP1"])
+
+    def test_breakeven_after_tp1(self):
+        cs = [candle(0, 99, 97.5, 98.5), candle(1, 109, 99, 107), candle(2, 100, 97.9, 98)]
+        out = self.lc(cs, 3)
+        self.assertEqual(out["state"], "BE")
+        self.assertAlmostEqual(out["r"], 0.5 * 2 - 0.1 / 100 * 98 / 5)
+
+    def test_time_exit(self):
+        cs = [candle(0, 99, 97.5, 98.5)] + [candle(i, 100, 98.5, 99) for i in range(1, 300)]
+        self.assertEqual(self.lc(cs, 300)["state"], "TIME")
+
+
 class AccountTest(unittest.TestCase):
     def sig(self, ts, r, symbol="A", side="long", dur=3600):
         return {"ts": ts, "exit_ts": ts + dur, "r": r, "symbol": symbol, "side": side, "market": "crypto"}
@@ -122,6 +153,13 @@ class StrategyTest(unittest.TestCase):
         self.assertIsNone(strategy.rejection(self.cand(), self.CFG, {"crypto": "up"}))
         short = self.cand(side="short", signal="SAT", sl=103.0, tp1=92.5, tp2=90.0)
         self.assertIsNotNone(strategy.rejection(short, self.CFG, {"crypto": "up"}))
+
+    def test_active_positions_count_and_block_symbol(self):
+        cands = [self.cand(symbol=s) for s in "XYZ"]
+        active = [self.cand(symbol="X"), self.cand(symbol="Q", market="bist")]
+        chosen = strategy.select(cands, self.CFG, active=active)
+        self.assertEqual([c["symbol"] for c in chosen], ["Y"])  # X zaten açık; 2 aktif + 1 = limit 3
+        self.assertEqual(strategy.select(cands, self.CFG, active=active * 2), [])
 
     def test_sizing(self):
         s = strategy.sizing(self.cand(), self.CFG)

@@ -1,11 +1,19 @@
 """Tarama sonucunu Telegram'a gönderme: özet tablo + 10'arlı grafik albümleri."""
 import asyncio
+import html
 import logging
+import time
+from datetime import datetime
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, MenuButtonWebApp, WebAppInfo
+from telegram.constants import ParseMode
 
+from bot import monitor
 from core import chart, db, scanner, settings, strategy, tracker
+
+TZ = ZoneInfo("Europe/Istanbul")
 
 log = logging.getLogger(__name__)
 ICON = {"AL": "🟢", "SAT": "🔴", "BEKLE": "🟡"}
@@ -41,9 +49,15 @@ async def send_charts(bot: Bot, chat_id: int, results: list[dict], ranks: list[i
 
 
 async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> None:
-    """Sıra: işlem adayları → kripto LONG/SHORT → altın/gümüş/endeks → BIST100 LONG/SHORT."""
+    """Sıra: işlem olayları (doldu/TP1/stop…) → özet → yeni adaylar → tablolar (sadece table_hours'ta)."""
     cfg = settings.all_settings()
     await set_calc_menu(bot, chat_id, cfg)
+    try:
+        pos = await monitor.check(bot, chat_id, cfg)
+    except Exception:  # noqa: BLE001 — takip hatası raporu durdurmasın
+        log.exception("pozisyon takibi hatası")
+        pos = []
+    active = [p for p in pos if p["state"] in monitor.ACTIVE]
     longs, shorts, failed = await scanner.scan()
     # kripto dışı piyasalar: hata olursa kripto raporunu bozmasın
     try:
@@ -58,13 +72,19 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     except Exception:  # noqa: BLE001 — rejim bilinmiyorsa filtre uygulanmaz
         log.exception("rejim hesaplanamadı")
         regs = {}
-    cands = strategy.select(everything, cfg, regs)
+    cands = strategy.select(everything, cfg, regs, active=active)
     for c in cands:
         c["candidate"] = True
     tracker.record(everything, cfg["entry_mode"])
 
-    await send_candidates(bot, chat_id, cands, cfg, regs)
+    await send_summary(bot, chat_id, cfg, regs, pos, cands, title)
+    if cands:
+        await send_candidates(bot, chat_id, cands, cfg, regs)
 
+    if not tables_due(cfg):
+        if failed or t_failed:
+            log.warning("veri alınamadı: %s", failed + t_failed)
+        return
     tables = [
         (longs, f"🟢 KRİPTO LONG — en güçlü {len(longs)} (skor yüksekten düşüğe)", f"{title} · Kripto LONG", "Coin"),
         (shorts, f"🔴 KRİPTO SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", f"{title} · Kripto SHORT", "Coin"),
@@ -92,6 +112,43 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
         {k: r[k] for k in ("symbol", "signal", "side", "entry", "sl", "tp1", "tp2")} | {"hits": []}
         for r in cands
     ])
+
+
+def tables_due(cfg: dict) -> bool:
+    """Bilgi tabloları sadece table_hours'taki raporlarda (GitHub gecikmesine karşı rapor dilimine yuvarlanır)."""
+    hour = datetime.now(TZ).hour
+    past = [h for h in cfg["report_hours"] if h <= hour]
+    slot = max(past) if past else max(cfg["report_hours"])
+    return slot in cfg["table_hours"]
+
+
+async def send_summary(bot: Bot, chat_id: int, cfg: dict, regs: dict, pos: list[dict], cands: list[dict],
+                       title: str) -> None:
+    now = int(time.time())
+    esc = html.escape
+    lines = [f"📋 <b>{esc(title)} — {datetime.now(TZ):%d.%m %H:%M}</b>"]
+    if regs:
+        lines.append("Piyasa: " + " · ".join(f"{name} {REGIME_TEXT[regs[k]]}"
+                                             for k, name in (("crypto", "BTC"), ("bist", "BIST100")) if k in regs))
+    active = [p for p in pos if p["state"] in monitor.ACTIVE]
+    recent = [p for p in pos if p["state"] not in monitor.ACTIVE
+              and max([ts for _, ts in p["events"]], default=0) >= now - 86400]
+    lines.append(f"\n<b>İşlemler ({len(active)}/{cfg['max_open']} dolu)</b>")
+    shown = monitor.position_lines(active + recent, now)
+    lines.append("<pre>" + esc("\n".join(shown)) + "</pre>" if shown else "Açık ya da bekleyen işlem yok.")
+    if cands:
+        lines.append(f"\n🎯 <b>Yeni işlem adayı: {len(cands)}</b> — tablo aşağıda")
+    elif len(active) >= cfg["max_open"]:
+        lines.append("\n🎯 Yeni aday yok: işlem limiti dolu.")
+    else:
+        lines.append(f"\n🎯 Yeni aday yok (AL/SAT + R:R ≥ {cfg['cand_min_rr']:g} + trend yönü şartları sağlanmadı). "
+                     "Beklemek de bir pozisyondur.")
+    a = tracker.virtual_account(now, cfg["capital_usd"], cfg["risk_pct"], cfg["max_open"], cfg["max_same_dir_crypto"])
+    exp = "—" if a["expectancy"] is None else f"{a['expectancy']:+.2f}R"
+    lines.append(f"💼 Sanal hesap: {a['equity']:,.0f} $ · {a['trades']} kapanmış işlem · beklenti {exp}".replace(",", "."))
+    if not tables_due(cfg):
+        lines.append(f"<i>Piyasa tabloları {' ve '.join(f'{h:02d}:00' for h in cfg['table_hours'])} raporlarında.</i>")
+    await bot.send_message(chat_id, "\n".join(lines), parse_mode=ParseMode.HTML, reply_markup=calc_buttons(cfg, []))
 
 
 def calc_link(cfg: dict, r: dict | None = None) -> str:

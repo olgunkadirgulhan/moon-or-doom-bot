@@ -4,15 +4,17 @@ on:
   schedule:
     # Günde 6 rapor, 4 saatte bir: UTC 00,04,08,12,16,20 → İstanbul 03, 07, 11, 15, 19, 23
     - cron: "0 */4 * * *"
+    # Raporların arası (UTC 02,06,…,22 → İstanbul 05, 09, 13, 17, 21, 01): sadece işlem takibi (doldu/TP1/stop/süre)
+    - cron: "0 2-22/4 * * *"
     # Her gün 17:00 UTC → İstanbul 20:00: günlük sonuç (+ cumartesi haftalık, ayın son günü aylık).
     # Tek zamanlama: aynı anda birden çok çalışma kuyruğa girip birbirini iptal etmesin.
     - cron: "0 17 * * *"
   workflow_dispatch:
     inputs:
       mode:
-        description: "report = sıralama tabloları · results = bugünün sonuçları · daily/weekly/monthly = tek sonuç"
+        description: "report = rapor · monitor = işlem takibi · results = bugünün sonuçları · daily/weekly/monthly = tek sonuç"
         type: choice
-        options: [report, results, daily, weekly, monthly]
+        options: [report, monitor, results, daily, weekly, monthly]
         default: report
 
 permissions:
@@ -27,7 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      MODE: ${{ github.event.inputs.mode || (github.event.schedule == '0 17 * * *' && 'results' || 'report') }}
+      MODE: >-
+        ${{ github.event.inputs.mode
+            || (github.event.schedule == '0 17 * * *' && 'results')
+            || (github.event.schedule == '0 2-22/4 * * *' && 'monitor')
+            || 'report' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
