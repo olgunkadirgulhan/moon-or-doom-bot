@@ -1,5 +1,5 @@
-"""Zamanlanmış işler (İstanbul saati): 2 saatte bir rapor, cumartesi 20:00 haftalık ve
-ayın son günü 20:00 aylık isabet sonucu, opsiyonel SL/TP uyarıları."""
+"""Zamanlanmış işler (İstanbul saati): günde 6 rapor, her gün 20:00 günlük (+ cumartesi haftalık,
+ayın son günü aylık) isabet sonucu, opsiyonel SL/TP uyarıları."""
 import logging
 from datetime import time
 from zoneinfo import ZoneInfo
@@ -8,7 +8,7 @@ from telegram.ext import Application, ContextTypes
 
 from bot.auth import allowed_chat_id
 from bot.report import send_report, send_result
-from core import chart, data, db, settings
+from core import chart, data, db, settings, tracker
 
 log = logging.getLogger(__name__)
 TZ = ZoneInfo("Europe/Istanbul")
@@ -22,12 +22,8 @@ def schedule_reports(app: Application) -> list[int]:
     hours = settings.get("report_hours")
     for h in hours:
         jq.run_daily(report_job, time(hour=h, tzinfo=TZ), name="report")
-    at = time(hour=settings.get("result_hour"), tzinfo=TZ)
-    if not jq.get_jobs_by_name("weekly"):
-        # PTB: 0=Pazar … 6=Cumartesi
-        jq.run_daily(result_job, at, days=(6,), name="weekly", data="weekly")
-    if not jq.get_jobs_by_name("monthly"):
-        jq.run_monthly(result_job, at, day=-1, name="monthly", data="monthly")
+    if not jq.get_jobs_by_name("results"):
+        jq.run_daily(result_job, time(hour=settings.get("result_hour"), tzinfo=TZ), name="results")
     if not jq.get_jobs_by_name("alerts"):
         jq.run_repeating(alert_job, interval=ALERT_INTERVAL, first=60, name="alerts")
     log.info("Rapor saatleri (İstanbul): %s", hours)
@@ -49,11 +45,12 @@ async def result_job(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = allowed_chat_id()
     if chat_id is None:
         return
-    try:
-        await send_result(ctx.bot, chat_id, ctx.job.data)
-    except Exception as e:  # noqa: BLE001
-        log.exception("sonuç raporu hatası")
-        await ctx.bot.send_message(chat_id, f"⚠️ {ctx.job.data} sonuç raporu başarısız: {e}")
+    for period in tracker.due_periods():
+        try:
+            await send_result(ctx.bot, chat_id, period)
+        except Exception as e:  # noqa: BLE001
+            log.exception("sonuç raporu hatası")
+            await ctx.bot.send_message(chat_id, f"⚠️ {period} sonuç raporu başarısız: {e}")
 
 
 def _hit(plan: dict, price: float) -> str | None:

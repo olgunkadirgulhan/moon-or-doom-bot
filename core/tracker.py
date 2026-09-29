@@ -95,9 +95,12 @@ def _stats(items: list[dict]) -> dict:
 
 
 def period_bounds(period: str, now: datetime | None = None) -> tuple[int, int, str]:
-    """(başlangıç_ts, bitiş_ts, başlık) — weekly: son 7 gün, monthly: ayın 1'inden bugüne."""
+    """(başlangıç_ts, bitiş_ts, başlık) — daily: son 24 saat, weekly: son 7 gün, monthly: ayın 1'inden bugüne."""
     now = now or datetime.now(TZ)
-    if period == "monthly":
+    if period == "daily":
+        start = now - timedelta(days=1)
+        title = f"Günlük Sonuç — {now:%d.%m.%Y}"
+    elif period == "monthly":
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         title = f"Aylık Sonuç — {now:%m.%Y}"
     else:
@@ -109,6 +112,17 @@ def period_bounds(period: str, now: datetime | None = None) -> tuple[int, int, s
 def is_last_day_of_month(now: datetime | None = None) -> bool:
     now = now or datetime.now(TZ)
     return (now + timedelta(days=1)).month != now.month
+
+
+def due_periods(now: datetime | None = None) -> list[str]:
+    """Akşam sonuç çalışmasında bugün gönderilecek dönemler."""
+    now = now or datetime.now(TZ)
+    periods = ["daily"]
+    if now.weekday() == 5:  # cumartesi
+        periods.append("weekly")
+    if is_last_day_of_month(now):
+        periods.append("monthly")
+    return periods
 
 
 async def evaluate(since: int, until: int) -> dict:

@@ -1,6 +1,6 @@
 """Tek seferlik iş, sonra çık. GitHub Actions için:
-`python -m bot.oneshot report|weekly|monthly`
-monthly sadece ayın son günü çalışır (FORCE=1 ile her gün).
+`python -m bot.oneshot report|results|daily|weekly|monthly`
+results: bugün gereken tüm sonuçlar (günlük + cumartesi haftalık + ay sonu aylık).
 """
 import asyncio
 import logging
@@ -26,12 +26,13 @@ async def main(mode: str) -> None:
     chat_id = allowed_chat_id()
     if not token or chat_id is None:
         sys.exit("TELEGRAM_BOT_TOKEN ve ALLOWED_CHAT_ID gerekli.")
-    if mode == "monthly" and not tracker.is_last_day_of_month() and os.getenv("FORCE") != "1":
-        logging.info("Ayın son günü değil, aylık sonuç atlandı.")
-        return
     try:
         async with Bot(token) as bot:
-            if mode in ("weekly", "monthly"):
+            if mode == "results":
+                # akşam çalışması: her gün günlük, cumartesi haftalık, ayın son günü aylık
+                for period in tracker.due_periods():
+                    await send_result(bot, chat_id, period)
+            elif mode in ("daily", "weekly", "monthly"):
                 await send_result(bot, chat_id, mode)
             else:
                 await send_report(bot, chat_id, title="Otomatik Rapor")

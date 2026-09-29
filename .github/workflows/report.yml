@@ -4,16 +4,15 @@ on:
   schedule:
     # Günde 6 rapor, 4 saatte bir: UTC 00,04,08,12,16,20 → İstanbul 03, 07, 11, 15, 19, 23
     - cron: "0 */4 * * *"
-    # Cumartesi 17:00 UTC → İstanbul 20:00: haftalık isabet sonucu
-    - cron: "0 17 * * 6"
-    # Ayın 28-31'i 17:00 UTC → betik sadece ayın son günüyse aylık sonucu gönderir
-    - cron: "0 17 28-31 * *"
+    # Her gün 17:00 UTC → İstanbul 20:00: günlük sonuç (+ cumartesi haftalık, ayın son günü aylık).
+    # Tek zamanlama: aynı anda birden çok çalışma kuyruğa girip birbirini iptal etmesin.
+    - cron: "0 17 * * *"
   workflow_dispatch:
     inputs:
       mode:
-        description: "report = sıralama tabloları, weekly = haftalık sonuç, monthly = aylık sonuç"
+        description: "report = sıralama tabloları · results = bugünün sonuçları · daily/weekly/monthly = tek sonuç"
         type: choice
-        options: [report, weekly, monthly]
+        options: [report, results, daily, weekly, monthly]
         default: report
 
 permissions:
@@ -28,12 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      MODE: >-
-        ${{ github.event.inputs.mode
-            || (github.event.schedule == '0 17 * * 6' && 'weekly')
-            || (github.event.schedule == '0 17 28-31 * *' && 'monthly')
-            || 'report' }}
-      FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      MODE: ${{ github.event.inputs.mode || (github.event.schedule == '0 17 * * *' && 'results' || 'report') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
