@@ -28,7 +28,7 @@ PRED_FILE = TRACK_DIR / "predictions.csv"
 OUT_FILE = TRACK_DIR / "outcomes.csv"
 RESULTS_FILE = TRACK_DIR / "results.csv"
 PRED_FIELDS = ["ts", "symbol", "side", "signal", "score", "rr", "entry", "sl", "tp1", "tp2", "market", "candidate",
-               "price", "mode"]
+               "price", "mode", "onchain", "netflow"]
 OUT_FIELDS = ["ts", "symbol", "side", "market", "outcome", "tp2_hit", "pnl", "r", "exit_ts"]
 RESULT_FIELDS = ["sent_at", "period", "title", "total", "tp", "sl", "open", "accuracy",
                  "acc_crypto", "acc_tradfi", "acc_bist", "acct_trades", "acct_expectancy_r", "acct_equity"]
@@ -82,9 +82,15 @@ def _append(path, fields: list[str], rows: list[dict]) -> None:
 
 def record(results: list[dict], mode: str = "market") -> None:
     now = int(time.time())
+
+    def onchain(r, key):  # veri yoksa boş: sonradan tahmin gücü ölçümünde ayırt edilsin
+        oc = r.get("onchain") or {}
+        return oc.get(key) if oc.get("available") else ""
+
     _append(PRED_FILE, PRED_FIELDS, [
         {"ts": now, **{k: r.get(k, "") for k in PRED_FIELDS[1:]},
-         "market": r.get("market") or "crypto", "candidate": 1 if r.get("candidate") else "", "mode": mode}
+         "market": r.get("market") or "crypto", "candidate": 1 if r.get("candidate") else "", "mode": mode,
+         "onchain": onchain(r, "score"), "netflow": onchain(r, "netflow_24h")}
         for r in results
     ])
 

@@ -1,5 +1,6 @@
 # Borsa cüzdan etiketleri (chainid → borsa → adresler).
-# Kaynak/genişletme: github.com/brianleect/etherscan-labels — sadece büyük borsalar.
+# Ethereum adresleri 29.09.2026'da github.com/brianleect/etherscan-labels ile doğrulandı (11/11).
+# Etherscan ücretsiz planı: Ethereum (1) ve Arbitrum (42161) var; BSC (56), Optimism (10), Base ücretli.
 # Adres ne kadar çoksa netflow o kadar doğru, ama her adres token başına 1 API çağrısı demek.
 
 1:
@@ -15,8 +16,6 @@
     - "0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43"  # Coinbase 10
   OKX:
     - "0x6cC5F688a315f3dC28A7781717a9A798a59fDA7b"
-  Bybit:
-    - "0xf89d7b9c864f589bbF53a82105107622B35EaA40"
   Kraken:
     - "0x2910543Af39abA0Cd09dBb2D50200b3E800A63D2"  # Kraken 1
     - "0x267be1C1D684F78cb4F6a176C4911b741E4Ffdc0"  # Kraken 4

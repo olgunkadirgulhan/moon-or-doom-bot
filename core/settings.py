@@ -27,7 +27,8 @@ DEFAULTS = {
     "universe_size": 40,
     "alerts": False,
     "charts": False,
-    "weights": {"trend": 25, "proximity": 25, "rsi": 15, "confluence": 15, "onchain": 20},
+    # onchain 0: sadece veri toplanır (tracking/predictions.csv onchain sütunu); tahmin gücü ölçülünce ağırlık verilir
+    "weights": {"trend": 25, "proximity": 25, "rsi": 15, "confluence": 15, "onchain": 0},
 }
 
 

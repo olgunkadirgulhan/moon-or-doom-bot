@@ -156,8 +156,8 @@ async def analyze(symbol: str, price: float, volume_24h: float) -> dict:
             whales.append({"usd": usd, "dir": "out" if from_ex else "in", "exchange": from_ex or to_ex})
 
     netflow = outflow - inflow
-    # netflow, 24s hacmin %1'ine ulaşınca skor ±100'e doyar
-    scale = max(volume_24h * 0.01, 1.0)
+    # netflow, 24s hacmin %5'ine ulaşınca skor ±100'e doyar (%1'de büyük tokenların çoğu hep ±100 çıkıyordu)
+    scale = max(volume_24h * 0.05, 1.0)
     score = max(-100.0, min(100.0, 100.0 * netflow / scale))
     return {
         "available": True,
