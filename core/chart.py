@@ -49,6 +49,11 @@ def fmt_price(p: float) -> str:
     return f"{p:.{decimals}f}"
 
 
+def fmt_price_tr(p: float) -> str:
+    """Türkçe biçim: ondalık virgül, binlik nokta (10,866 · 4.174) — mesaj metinleri için."""
+    return fmt_price(p).replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def fmt_usd(v: float | None) -> str:
     if v is None:
         return "—"
@@ -414,13 +419,16 @@ def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
     usd = lambda v: f"{v:,.0f}".replace(",", ".") + " $"  # noqa: E731
     market = {"crypto": "Kripto", "tradfi": "Emtia/Endeks", "bist": "BIST"}
     limit = cfg.get("entry_mode") == "limit"
-    headers = ["#", "Varlık", "Pazar", "Yön", "Sinyal", "Skor", "Limit giriş" if limit else "Giriş", "SL", "TP1",
-               "TP2", "R:R",
-               "Stop %", "Pozisyon", f"Teminat ({cfg['leverage']:g}x)", "Risk", "TP1 kazanç", "TP2 kazanç"]
+    headers = ["#", "Varlık", "Pazar", "Yön", "Sinyal", "Güç", "Emir\nfiyatı" if limit else "Giriş", "Zarar-kes\n(stop)",
+               "Hedef 1", "Hedef 2", "Kazanç/\nrisk", "Stop\nuzaklığı", "İşlem\nbüyüklüğü",
+               f"Teminat\n({cfg['leverage']:g}x)", "En fazla\nkayıp", "Hedef 1\nkârı", "Hedef 2\nkârı"]
+    fp = fmt_price_tr
     rows = [[
-        str(i), r.get("name") or r["symbol"], market.get(r.get("market"), "Kripto"), side_label(r), r["signal"],
-        f"{r['score']:.0f}", fmt_price(r["entry"]), fmt_price(r["sl"]), fmt_price(r["tp1"]), fmt_price(r["tp2"]),
-        f"{r['rr']:.1f}", f"%{r['stop_pct']:.1f}", usd(r["position_usd"]), usd(r["margin_usd"]),
+        str(i), r.get("name") or r["symbol"], market.get(r.get("market"), "Kripto"),
+        "ALIŞ" if r["side"] == "long" else "SATIŞ", r["signal"],
+        f"{r['score']:.0f}", fp(r["entry"]), fp(r["sl"]), fp(r["tp1"]), fp(r["tp2"]),
+        f"{r['rr']:.1f}".replace(".", ","), f"%{r['stop_pct']:.1f}".replace(".", ","),
+        usd(r["position_usd"]), usd(r["margin_usd"]),
         "−" + usd(r["risk_usd"]), "+" + usd(r["tp1_usd"] / 2), "+" + usd(r["tp2_usd"] / 2),
     ] for i, r in enumerate(cands, 1)]
 
@@ -430,8 +438,8 @@ def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
         fig = plt.figure(figsize=(20, height), dpi=100, facecolor=BG)
         ax = fig.add_axes([0.01, footer_h / height, 0.98, 1 - (0.95 + footer_h) / height])
         ax.axis("off")
-        widths = [0.025, 0.08, 0.06, 0.045, 0.045, 0.035, 0.07, 0.07, 0.07, 0.07, 0.035,
-                  0.045, 0.06, 0.07, 0.05, 0.06, 0.06]
+        widths = [0.025, 0.08, 0.06, 0.045, 0.045, 0.035, 0.07, 0.07, 0.065, 0.065, 0.05,
+                  0.055, 0.07, 0.07, 0.06, 0.06, 0.06]
         widths = [w / sum(widths) for w in widths]
         tbl = ax.table(cellText=rows, colLabels=headers, loc="upper center", cellLoc="center", colWidths=widths)
         tbl.auto_set_font_size(False)
@@ -442,7 +450,8 @@ def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
             cell.set_text_props(color=TEXT)
             if row == 0:
                 cell.set_facecolor("#232937")
-                cell.set_text_props(color=TEXT, fontweight="bold")
+                cell.set_text_props(color=TEXT, fontweight="bold", fontsize=10.5)
+                cell.set_height(cell.get_height() * 1.6)  # iki satırlık başlıklar
                 continue
             cell.set_facecolor(PANEL if row % 2 else "#1b202a")
             r = cands[row - 1]
@@ -456,14 +465,13 @@ def candidates_table(cands: list[dict], cfg: dict, title: str) -> bytes:
                  color=TEXT, ha="center", va="center", fontsize=15, fontweight="bold")
         risk = cfg["capital_usd"] * cfg["risk_pct"] / 100
         fig.text(0.012, (footer_h - 0.12) / height, "\n".join([
-            f"Pozisyon büyüklüğü: sermaye {usd(cfg['capital_usd'])} × %{cfg['risk_pct']:g} risk = işlem başı en fazla "
-            f"{usd(risk)} kayıp. Pozisyon = risk ÷ stop mesafesi; teminat = pozisyon ÷ {cfg['leverage']:g}x. "
-            "Kaldıraç riski değil, sadece bağlanan teminatı değiştirir.",
-            ("Giriş: LİMİT emir, 12 saat içinde dolmazsa iptal · " if limit else "Giriş: güncel fiyattan · ")
-            + "stopu girişle birlikte koy · TP1'de yarısını kapat, stopu girişe çek · kalanı TP2'de ya da "
-            f"{cfg['horizon_h']} saat sonunda kapat · stop asla uzaklaştırılmaz.",
-            "TP1/TP2 kazanç = pozisyonun yarısının o hedefteki kârı. Kurallar: AL/SAT sinyali, R:R ≥ "
-            f"{cfg['cand_min_rr']:g}, stop likidasyonun yarısından yakın, en fazla {cfg['max_open']} işlem. "
-            "Komisyon hariç. Yatırım tavsiyesi değildir.",
+            f"Her işlemde en fazla {usd(risk)} kaybedersin (sermaye {usd(cfg['capital_usd'])} × %{cfg['risk_pct']:g}). "
+            "İşlem büyüklüğü bu kayba göre hesaplandı: stop ne kadar uzaksa işlem o kadar küçük. "
+            f"Kaldıraç ({cfg['leverage']:g}x) riski artırmaz, sadece borsada bağlanan parayı (teminat) azaltır.",
+            ("Emir fiyatına limit emir koy; fiyat 12 saatte gelmezse iptal et · " if limit else "Şimdiki fiyattan gir · ")
+            + "zarar-kes emrini hemen koy · Hedef 1'de yarısını kapat, zarar-kesi girişe taşı · kalanı Hedef 2'de ya da "
+            f"{cfg['horizon_h'] // 24} gün sonunda kapat · zarar-kesi asla uzaklaştırma.",
+            "Hedef kârları, pozisyonun yarısı o hedefte kapanınca kazanılan tutardır. Komisyon hariç. "
+            "Yatırım tavsiyesi değildir; hangi işleme gireceğine sen karar verirsin.",
         ]), color=TEXT, fontsize=11, va="top", ha="left", linespacing=1.6, parse_math=False)
         return _png(fig)

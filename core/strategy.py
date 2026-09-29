@@ -66,22 +66,27 @@ def conviction(r: dict) -> float:
 
 
 def select(pool: list[dict], cfg: dict, regimes: dict | None = None, check_session: bool = True,
-           active: list[dict] | None = None) -> list[dict]:
+           active: list[dict] | None = None, enforce_limits: bool = True) -> list[dict]:
     """Kuralları geçen, kanaati en güçlü adaylar; her birine pozisyon büyüklüğü eklenir.
-    active: zaten açık/bekleyen işlemler — limitlere sayılır, aynı varlık yeniden önerilmez."""
+    active: zaten açık/bekleyen işlemler — aynı varlık yeniden önerilmez; enforce_limits=True ise
+    işlem sayısı ve aynı yön limitlerine de sayılır. enforce_limits=False: kuralı geçen herkes (seçim kullanıcıda)."""
     active = active or []
-    if len(active) >= cfg["max_open"]:
+    cap = cfg["max_open"] if enforce_limits else cfg.get("max_candidates", 10)
+    if enforce_limits and len(active) >= cap:
         return []
     ok = sorted((r for r in pool if rejection(r, cfg, regimes, check_session) is None), key=conviction, reverse=True)
     chosen, seen = [], {(a.get("market"), a["symbol"]) for a in active}
     for r in ok:
         key = (r.get("market"), r["symbol"])
-        same_dir = sum(c.get("market") == "crypto" and c["side"] == r["side"] for c in chosen + active)
-        if key in seen or (r.get("market") == "crypto" and same_dir >= cfg["max_same_dir_crypto"]):
+        if key in seen:
             continue
+        if enforce_limits:
+            same_dir = sum(c.get("market") == "crypto" and c["side"] == r["side"] for c in chosen + active)
+            if r.get("market") == "crypto" and same_dir >= cfg["max_same_dir_crypto"]:
+                continue
         seen.add(key)
         chosen.append(r)
-        if len(chosen) + len(active) >= cfg["max_open"]:
+        if len(chosen) + (len(active) if enforce_limits else 0) >= cap:
             break
     for r in chosen:
         r.update(sizing(r, cfg))

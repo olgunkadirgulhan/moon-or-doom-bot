@@ -1,4 +1,4 @@
-"""Tarama sonucunu Telegram'a gönderme: özet tablo + 10'arlı grafik albümleri."""
+﻿"""Tarama sonucunu Telegram'a gönderme: özet tablo + 10'arlı grafik albümleri."""
 import asyncio
 import html
 import logging
@@ -72,7 +72,8 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     except Exception:  # noqa: BLE001 — rejim bilinmiyorsa filtre uygulanmaz
         log.exception("rejim hesaplanamadı")
         regs = {}
-    cands = strategy.select(everything, cfg, regs, active=active)
+    # kuralı geçen herkes gösterilir (seçim kullanıcıda); zaten takipte olan varlık tekrar önerilmez
+    cands = strategy.select(everything, cfg, regs, active=active, enforce_limits=False)
     for c in cands:
         c["candidate"] = True
     tracker.record(everything, cfg["entry_mode"])
@@ -126,28 +127,31 @@ async def send_summary(bot: Bot, chat_id: int, cfg: dict, regs: dict, pos: list[
                        title: str) -> None:
     now = int(time.time())
     esc = html.escape
+    risk = monitor.usd(cfg["capital_usd"] * cfg["risk_pct"] / 100, False)
     lines = [f"📋 <b>{esc(title)} — {datetime.now(TZ):%d.%m %H:%M}</b>"]
     if regs:
-        lines.append("Piyasa: " + " · ".join(f"{name} {REGIME_TEXT[regs[k]]}"
-                                             for k, name in (("crypto", "BTC"), ("bist", "BIST100")) if k in regs))
+        lines += [f"{REGIME_TEXT[regs[k]].format(name=name, mkt=mkt)}"
+                  for k, name, mkt in (("crypto", "BTC", "kriptoda"), ("bist", "BIST100", "BIST hisselerinde")) if k in regs]
     active = [p for p in pos if p["state"] in monitor.ACTIVE]
     recent = [p for p in pos if p["state"] not in monitor.ACTIVE
               and max([ts for _, ts in p["events"]], default=0) >= now - 86400]
-    lines.append(f"\n<b>İşlemler ({len(active)}/{cfg['max_open']} dolu)</b>")
-    shown = monitor.position_lines(active + recent, now)
-    lines.append("<pre>" + esc("\n".join(shown)) + "</pre>" if shown else "Açık ya da bekleyen işlem yok.")
+    lines.append(f"\n<b>📂 Takipteki işlemler: {len(active)} açık/bekleyen</b>"
+                 + (f" (kuralımız en fazla {cfg['max_open']} — karar senin)" if len(active) > cfg["max_open"] else ""))
+    shown = monitor.position_lines(active + recent, now, cfg)
+    lines.append("\n\n".join(shown) if shown else "Şu an açık ya da bekleyen işlem yok.")
     if cands:
-        lines.append(f"\n🎯 <b>Yeni işlem adayı: {len(cands)}</b> — tablo aşağıda")
-    elif len(active) >= cfg["max_open"]:
-        lines.append("\n🎯 Yeni aday yok: işlem limiti dolu.")
+        lines.append(f"\n🎯 <b>Kurallara uyan {len(cands)} yeni işlem fırsatı var</b> — ayrıntılar bir sonraki mesajda.")
     else:
-        lines.append(f"\n🎯 Yeni aday yok (AL/SAT + R:R ≥ {cfg['cand_min_rr']:g} + trend yönü şartları sağlanmadı). "
-                     "Beklemek de bir pozisyondur.")
+        lines.append("\n🎯 Kurallara uyan yeni işlem fırsatı yok. Acele etme: beklemek de bir karardır.")
     a = tracker.virtual_account(now, cfg["capital_usd"], cfg["risk_pct"], cfg["max_open"], cfg["max_same_dir_crypto"])
-    exp = "—" if a["expectancy"] is None else f"{a['expectancy']:+.2f}R"
-    lines.append(f"💼 Sanal hesap: {a['equity']:,.0f} $ · {a['trades']} kapanmış işlem · beklenti {exp}".replace(",", "."))
+    if a["trades"]:
+        lines.append(f"\n💼 Deneme hesabı ({monitor.usd(cfg['capital_usd'], False)} ile başladı): şu an "
+                     f"{monitor.usd(a['equity'], False)} · {a['trades']} işlem kapandı · işlem başına ortalama "
+                     f"{monitor.usd(a['expectancy'] * cfg['capital_usd'] * cfg['risk_pct'] / 100)}")
+    else:
+        lines.append(f"\n💼 Deneme hesabı: henüz kapanmış işlem yok (her işlemde en fazla {risk} risk).")
     if not tables_due(cfg):
-        lines.append(f"<i>Piyasa tabloları {' ve '.join(f'{h:02d}:00' for h in cfg['table_hours'])} raporlarında.</i>")
+        lines.append(f"<i>Piyasa tabloları {' ve '.join(f'{h:02d}:00' for h in cfg['table_hours'])} raporlarında gelir.</i>")
     await bot.send_message(chat_id, "\n".join(lines), parse_mode=ParseMode.HTML, reply_markup=calc_buttons(cfg, []))
 
 
@@ -179,32 +183,60 @@ async def set_calc_menu(bot: Bot, chat_id: int, cfg: dict) -> None:
         log.exception("menü butonu ayarlanamadı")
 
 
-REGIME_TEXT = {"up": "📈 yükseliş (sadece long)", "down": "📉 düşüş (sadece short)", "neutral": "↔️ yatay (iki yön)"}
+REGIME_TEXT = {
+    "up": "📈 {name} yükseliş trendinde → {mkt} sadece ALIŞ (long: fiyat yükselirse kazanır) öneriliyor",
+    "down": "📉 {name} düşüş trendinde → {mkt} sadece SATIŞ (short: fiyat düşerse kazanır) öneriliyor",
+    "neutral": "↔️ {name} yatay → {mkt} iki yön de öneriliyor",
+}
+MARKET_NAME = {"crypto": "Kripto", "tradfi": "Emtia/Endeks", "bist": "BIST hisse"}
+
+
+def candidate_text(i: int, r: dict, cfg: dict) -> str:
+    """Bir işlem fırsatının kopyalanabilir, adım adım açıklaması (HTML)."""
+    f, esc = chart.fmt_price_tr, html.escape
+    name, verb = monitor.side_words(r)
+    long = r["side"] == "long"
+    limit = cfg["entry_mode"] == "limit" and r["entry"] != r["price"]
+    if limit:
+        entry = (f"Emir: <code>{f(r['entry'])}</code> fiyatına {'ALIŞ' if long else 'SATIŞ'} limit emri koy "
+                 f"(şu an {f(r['price'])}; fiyat {'düşüp' if long else 'yükselip'} buraya gelirse {verb}. "
+                 f"12 saatte gelmezse emri iptal et)")
+    else:
+        entry = f"Emir: şimdiki fiyattan (<code>{f(r['entry'])}</code>) {'ALIŞ' if long else 'SATIŞ'} yap"
+    return "\n".join([
+        f"<b>{i}) {esc(r.get('name') or r['symbol'])} — {name}</b> · {MARKET_NAME.get(r.get('market'), 'Kripto')} · "
+        f"sinyal gücü {r['score']:.0f}/100",
+        esc(entry).replace("&lt;code&gt;", "<code>").replace("&lt;/code&gt;", "</code>"),
+        f"🛑 Zarar-kes (stop): <code>{f(r['sl'])}</code> → buraya gelirse en fazla "
+        f"{monitor.usd(r['risk_usd'], False)} zararla çıkarsın",
+        f"🎯 Hedef 1: <code>{f(r['tp1'])}</code> → pozisyonun yarısını kapat (+{monitor.usd(r['tp1_usd'] / 2, False)}), "
+        f"sonra stopu girişe taşı",
+        f"🎯 Hedef 2: <code>{f(r['tp2'])}</code> → kalan yarıyı kapat (+{monitor.usd(r['tp2_usd'] / 2, False)})",
+        f"📐 Büyüklük: {monitor.usd(r['position_usd'], False)} işlem ({cfg['leverage']:g}x kaldıraçla "
+        f"{monitor.usd(r['margin_usd'], False)} teminat) · en fazla {cfg['horizon_h'] // 24} gün tutulur",
+        f"⚖️ Kazanç/risk: {r['rr']:.1f} (1 $ riske karşı ilk hedefte {r['rr']:.1f} $)".replace(".", ","),
+    ])
 
 
 async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict, regs: dict | None = None) -> None:
-    reg_line = ""
-    if regs and cfg.get("regime_filter"):
-        reg_line = "\nPiyasa rejimi: " + " · ".join(
-            f"{name} {REGIME_TEXT[regs[k]]}" for k, name in (("crypto", "BTC"), ("bist", "BIST100")) if k in regs)
-    if not cands:
-        await bot.send_message(
-            chat_id,
-            "🎯 İŞLEM ADAYI YOK — bu raporda strateji kurallarının hepsini geçen işlem çıkmadı.\n"
-            f"(AL/SAT sinyali + R:R ≥ {cfg['cand_min_rr']:g} + stop likidasyondan güvenli uzaklıkta + trend yönünde)"
-            f"{reg_line}\nBeklemek de bir pozisyondur; aşağıdaki tablolar sadece bilgi içindir.",
-            reply_markup=calc_buttons(cfg, []))
-        return
-    png = await asyncio.to_thread(chart.candidates_table, cands, cfg, "Moon or Doom — İşlem Adayları")
-    risk = cfg["capital_usd"] * cfg["risk_pct"] / 100
-    await bot.send_photo(
-        chat_id, png, write_timeout=SEND_TIMEOUT, reply_markup=calc_buttons(cfg, cands),
-        caption=f"🎯 İŞLEM ADAYLARI — kuralların hepsini geçen {len(cands)} işlem (en güçlüsü üstte). "
-                f"Her biri en fazla {risk:,.0f} $ risk (%{cfg['risk_pct']:g}). "
-                + ("Girişler LİMİT emir: 12 saat içinde dolmazsa iptal et. " if cfg["entry_mode"] == "limit" else "")
-                + f"İşlem en fazla {cfg['horizon_h']} saat tutulur. Önce 100 işlem sanal takip! "
-                "Aşağıdaki butonla kendi sermayene göre hesapla."
-                .replace(",", ".") + reg_line)
+    """Önce kopyalanabilir metin (Telegram 4096 karakter sınırına göre bölünür), sonra tablo resmi + hesaplama butonları."""
+    head = (f"🎯 <b>İŞLEM FIRSATLARI ({len(cands)})</b> — en güçlüsü üstte. Hepsi kurallara uyuyor, "
+            f"hangisine gireceğine sen karar ver (önerimiz aynı anda en fazla {cfg['max_open']} işlem).\n"
+            "Rakamların üstüne dokununca kopyalanır.")
+    chunks, cur = [], head
+    for i, r in enumerate(cands, 1):
+        block = candidate_text(i, r, cfg)
+        if len(cur) + len(block) + 2 > 3800:
+            chunks.append(cur)
+            cur = block
+        else:
+            cur += "\n\n" + block
+    chunks.append(cur)
+    for c in chunks:
+        await bot.send_message(chat_id, c, parse_mode=ParseMode.HTML)
+    png = await asyncio.to_thread(chart.candidates_table, cands, cfg, "Moon or Doom — İşlem Fırsatları")
+    await bot.send_photo(chat_id, png, write_timeout=SEND_TIMEOUT, reply_markup=calc_buttons(cfg, cands),
+                         caption="📋 Aynı fırsatlar tablo halinde. Kendi sermayene göre hesaplamak için butona dokun.")
 
 
 async def send_result(bot: Bot, chat_id: int, period: str) -> None:

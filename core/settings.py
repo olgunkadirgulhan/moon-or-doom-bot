@@ -19,6 +19,7 @@ DEFAULTS = {
     "horizon_h": 72,  # strateji işlem süresi (saat); isabet ölçümü 24 saat kalır
     "max_open": 3,
     "max_same_dir_crypto": 2,
+    "max_candidates": 10,  # raporda gösterilecek en fazla aday (seçim kullanıcıda; sanal hesap max_open'a uyar)
     "calc_url": "https://olgunkadirgulhan.github.io/moon-or-doom-calc/",
     "min_volume_usd": 20_000_000,  # likidite filtresi (kripto evreni)
     "regime_filter": True,  # BTC / BIST100 günlük trendine karşı işlem adayı yok
