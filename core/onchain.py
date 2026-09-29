@@ -18,7 +18,8 @@ from core import ROOT, db
 API = "https://api.etherscan.io/v2/api"
 CACHE_TTL = 900
 DAYS = 7
-MIN_INTERVAL = 0.22  # free tier: 5 çağrı/sn
+MIN_INTERVAL = 0.4  # ücretsiz plan en fazla 3 çağrı/sn; 2.5/sn ile pay bırak
+RETRIES = 5
 WHALE_USD = 250_000
 WHALE_VOL_PCT = 0.005
 TZ = ZoneInfo("Europe/Istanbul")
@@ -57,16 +58,16 @@ def _unavailable(reason: str) -> dict:
     return {"available": False, "score": 0, "reason": reason, "netflow_24h": None, "daily": [], "whales": []}
 
 
-async def _get(client: httpx.AsyncClient, params: dict) -> list[dict]:
+async def _get(client: httpx.AsyncClient, params: dict, timeout: float = 20) -> list[dict]:
     global _last_call
     async with _sem:
-        for attempt in range(3):
+        for attempt in range(RETRIES):
             async with _rate_lock:
                 wait = MIN_INTERVAL - (time.monotonic() - _last_call)
                 if wait > 0:
                     await asyncio.sleep(wait)
                 _last_call = time.monotonic()
-            r = await client.get(API, params=params, timeout=20)
+            r = await client.get(API, params=params, timeout=timeout)
             r.raise_for_status()
             body = r.json()
             result = body.get("result")
@@ -74,7 +75,7 @@ async def _get(client: httpx.AsyncClient, params: dict) -> list[dict]:
                 return result
             if isinstance(result, list) or "No transactions" in str(body.get("message")):
                 return []
-            if "rate limit" in str(result).lower() and attempt < 2:
+            if "rate limit" in str(result).lower() and attempt < RETRIES - 1:
                 await asyncio.sleep(1.0 + attempt)
                 continue
             raise RuntimeError(str(result or body.get("message"))[:120])

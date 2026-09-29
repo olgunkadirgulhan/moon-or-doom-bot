@@ -3,7 +3,7 @@
 # chainid: 1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum, 8453=Base, 10=Optimism
 # Kontrat yoksa (BTC, SOL, ETH native vb.) on-chain adımı atlanır → skor 0.
 
-manual: [BTC, ETH, SOL, LINK, PEPE]
+manual: [BTC, ETH, SOL, LINK, PEPE, UNI, AAVE]  # UNI/AAVE: on-chain veri toplama için (29.09.2026)
 
 tokens:
   LINK:  {chainid: 1, contract: "0x514910771AF9Ca656af840dff83E8264EcF986CA"}
