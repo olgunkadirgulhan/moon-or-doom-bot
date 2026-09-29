@@ -13,7 +13,7 @@ LIMIT = 300
 
 STABLES = {
     "USDT", "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDP", "USDE", "USD1", "PYUSD",
-    "EUR", "EURI", "AEUR", "TRY", "BRL", "XUSD", "USDD", "RLUSD", "BFUSD",
+    "EUR", "EURI", "AEUR", "TRY", "BRL", "XUSD", "USDD", "RLUSD", "BFUSD", "U",
     # altın ve wrapped/staked türevler: ayrı sinyal üretmesinin anlamı yok
     "XAUT", "PAXG", "WBTC", "WBETH", "BETH", "STETH", "WSTETH", "BNSOL", "CBBTC",
 }

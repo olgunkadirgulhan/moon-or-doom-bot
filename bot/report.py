@@ -48,7 +48,8 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
         (shorts, f"🔴 SHORT — en güçlü {len(shorts)} (skor düşükten yükseğe)", f"{title} · SHORT"),
     ]
     for rows, note, table_title in tables:
-        png = await asyncio.to_thread(chart.summary_table, rows, f"Moon or Doom — {table_title}")
+        png = await asyncio.to_thread(chart.summary_table, rows, f"Moon or Doom — {table_title}",
+                                      settings.get("margin_usd"), settings.get("leverage"))
         await bot.send_photo(chat_id, png, caption=note, write_timeout=SEND_TIMEOUT)
     if failed:
         await bot.send_message(chat_id, f"Veri alınamadı: {', '.join(failed)}")

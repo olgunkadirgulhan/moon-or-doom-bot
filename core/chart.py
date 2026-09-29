@@ -158,25 +158,50 @@ def coin_chart(res: dict) -> bytes:
         return _png(fig)
 
 
-def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Özeti") -> bytes:
-    headers = ["#", "Coin", "Sinyal", "Yön", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R", "Netflow 24s"]
-    rows = []
+LIQ_BUFFER = 0.9  # teminatın %90'ı gidince borsa pozisyonu kapatır (bakım teminatı payı, yaklaşık)
+
+
+def usd_exact(v: float) -> str:
+    """+1.650 $ biçimi (Türkçe binlik ayırıcı)."""
+    return ("+" if v >= 0 else "−") + f"{abs(v):,.0f}".replace(",", ".") + " $"
+
+
+def trade_pnl(r: dict, price: float, margin: float, leverage: float) -> float:
+    """Güncel fiyattan açılan pozisyonun `price`'ta kapanması halinde $ kâr/zarar (ücretler hariç)."""
+    move = (price - r["entry"]) / r["entry"]
+    return margin * leverage * (move if r["side"] == "long" else -move)
+
+
+def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Özeti",
+                  margin: float = 1000, leverage: float = 10) -> bytes:
+    headers = ["#", "Coin", "Sinyal", "Yön", "Skor", "Giriş", "SL", "TP1", "TP2", "R:R", "Netflow 24s",
+               "TP1 kâr", "TP2 kâr", "SL zarar"]
+    liq_loss = -margin * LIQ_BUFFER
+    rows, liquidated = [], []
     for i, r in enumerate(results, 1):
         oc = r.get("onchain", {})
+        sl_loss = trade_pnl(r, r["sl"], margin, leverage)
+        liq = sl_loss <= liq_loss
+        liquidated.append(liq)
         rows.append([
             str(i), r["symbol"], r["signal"], side_label(r), f"{r['score']:.0f}",
             fmt_price(r["entry"]), fmt_price(r["sl"]), fmt_price(r["tp1"]), fmt_price(r["tp2"]),
             f"{r['rr']:.1f}" + (" ⚠" if r["rr_low"] else ""),
             fmt_usd(oc.get("netflow_24h")) if oc.get("available") else "—",
+            usd_exact(trade_pnl(r, r["tp1"], margin, leverage)),
+            usd_exact(trade_pnl(r, r["tp2"], margin, leverage)),
+            f"LİKİDE {usd_exact(-margin)}" if liq else usd_exact(sl_loss),
         ])
 
     with _lock:
-        height = 1.1 + 0.33 * (len(rows) + 1)
-        fig = plt.figure(figsize=(16, height), dpi=100, facecolor=BG)
-        ax = fig.add_axes([0.01, 0.01, 0.98, 1 - 0.95 / height])
+        footer_h = 1.0
+        height = 1.1 + 0.33 * (len(rows) + 1) + footer_h
+        fig = plt.figure(figsize=(20, height), dpi=100, facecolor=BG)
+        ax = fig.add_axes([0.01, footer_h / height, 0.98, 1 - (0.95 + footer_h) / height])
         ax.axis("off")
         tbl = ax.table(cellText=rows, colLabels=headers, loc="upper center", cellLoc="center",
-                       colWidths=[0.04, 0.08, 0.08, 0.08, 0.06, 0.12, 0.12, 0.12, 0.12, 0.07, 0.11])
+                       colWidths=[0.03, 0.06, 0.06, 0.06, 0.045, 0.1, 0.1, 0.1, 0.1, 0.055, 0.08,
+                                  0.07, 0.07, 0.1])
         tbl.auto_set_font_size(False)
         tbl.set_fontsize(12)
         tbl.scale(1, 1.9)
@@ -199,8 +224,27 @@ def summary_table(results: list[dict], title: str = "Moon or Doom — Sinyal Öz
             elif col == 10 and r.get("onchain", {}).get("available"):
                 nf = r["onchain"].get("netflow_24h") or 0
                 cell.set_text_props(color=GREEN if nf >= 0 else RED)
+            elif col in (11, 12):
+                cell.set_text_props(color=GREEN, fontweight="bold")
+            elif col == 13:
+                cell.set_text_props(color=RED, fontweight="bold")
+                if liquidated[row - 1]:
+                    cell.set_facecolor("#4a1c1c")
         fig.text(0.5, 1 - 0.55 / height, f"{title}  ·  {datetime.now(TZ):%d.%m.%Y %H:%M} (İstanbul)",
                  color=TEXT, ha="center", va="center", fontsize=15, fontweight="bold")
+
+        pos = margin * leverage
+        liq_pct = 100 * LIQ_BUFFER / leverage
+        usd = lambda v: f"{v:,.0f}".replace(",", ".") + " $"  # noqa: E731
+        fig.text(0.012, (footer_h - 0.15) / height, "\n".join([
+            f"Kâr/zarar hesabı: {usd(margin)} teminat × {leverage:g}x kaldıraç = {usd(pos)} pozisyon, "
+            f"giriş güncel fiyattan. Fiyatın lehine her %1 hareketi ≈ +{usd(pos / 100)}, "
+            f"aleyhine her %1 hareketi ≈ −{usd(pos / 100)}.",
+            f"TP1/TP2 kâr = hedefe ulaşınca kazanç · SL zarar = stop olunca kayıp. "
+            f"Fiyat yaklaşık %{liq_pct:.0f} ters giderse pozisyon LİKİDE olur ve teminatın tamamı "
+            f"({usd(margin)}) gider; SL bundan uzaksa kırmızı 'LİKİDE' yazar.",
+            "Komisyon ve fonlama ücreti dahil değildir. Yatırım tavsiyesi değildir.",
+        ]), color=TEXT, fontsize=11, va="top", ha="left", linespacing=1.6, parse_math=False)
         return _png(fig)
 
 

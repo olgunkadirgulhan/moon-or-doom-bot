@@ -2,8 +2,8 @@ name: Otomatik rapor
 
 on:
   schedule:
-    # UTC çift saatler → İstanbul (UTC+3): 03, 05, 07, ... 23, 01
-    - cron: "0 */2 * * *"
+    # Günde 6 rapor, 4 saatte bir: UTC 00,04,08,12,16,20 → İstanbul 03, 07, 11, 15, 19, 23
+    - cron: "0 */4 * * *"
     # Cumartesi 17:00 UTC → İstanbul 20:00: haftalık isabet sonucu
     - cron: "0 17 * * 6"
     # Ayın 28-31'i 17:00 UTC → betik sadece ayın son günüyse aylık sonucu gönderir
