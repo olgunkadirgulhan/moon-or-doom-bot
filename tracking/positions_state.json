@@ -12,7 +12,8 @@
  "1790677194|tradfi|ALTIN_GR_USD|long": [],
  "1790677194|tradfi|ALTIN_ONS|long": [],
  "1790677194|bist|TUPRS|long": [
-  "FILLED"
+  "FILLED",
+  "SL"
  ],
  "1790677194|bist|TURSG|short": [
   "EXPIRED"
@@ -20,7 +21,9 @@
  "1790693097|bist|GUBRF|long": [
   "EXPIRED"
  ],
- "1790693097|bist|DOAS|long": [],
+ "1790693097|bist|DOAS|long": [
+  "SL"
+ ],
  "1790693097|bist|SASA|short": [
   "EXPIRED"
  ],
