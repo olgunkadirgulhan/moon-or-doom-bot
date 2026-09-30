@@ -17,8 +17,14 @@
  "1790677194|bist|TURSG|short": [
   "EXPIRED"
  ],
- "1790693097|bist|GUBRF|long": [],
+ "1790693097|bist|GUBRF|long": [
+  "EXPIRED"
+ ],
  "1790693097|bist|DOAS|long": [],
- "1790693097|bist|SASA|short": [],
- "1790693097|bist|GSRAY|short": []
+ "1790693097|bist|SASA|short": [
+  "EXPIRED"
+ ],
+ "1790693097|bist|GSRAY|short": [
+  "EXPIRED"
+ ]
 }
