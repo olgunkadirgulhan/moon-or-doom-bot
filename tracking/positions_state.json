@@ -14,7 +14,9 @@
  "1790677194|bist|TUPRS|long": [
   "FILLED"
  ],
- "1790677194|bist|TURSG|short": [],
+ "1790677194|bist|TURSG|short": [
+  "EXPIRED"
+ ],
  "1790693097|bist|GUBRF|long": [],
  "1790693097|bist|DOAS|long": [],
  "1790693097|bist|SASA|short": [],
