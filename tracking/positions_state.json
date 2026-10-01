@@ -36,6 +36,10 @@
  "1790743819|crypto|ENA|long": [
   "EXPIRED"
  ],
- "1790779620|bist|TUPRS|long": [],
- "1790779620|bist|ALTNY|short": []
+ "1790779620|bist|TUPRS|long": [
+  "EXPIRED"
+ ],
+ "1790779620|bist|ALTNY|short": [
+  "EXPIRED"
+ ]
 }
