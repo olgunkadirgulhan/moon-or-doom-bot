@@ -11,8 +11,12 @@
  "1790671132|bist|TSKB|short": [
   "EXPIRED"
  ],
- "1790677194|tradfi|ALTIN_GR_USD|long": [],
- "1790677194|tradfi|ALTIN_ONS|long": [],
+ "1790677194|tradfi|ALTIN_GR_USD|long": [
+  "TIME"
+ ],
+ "1790677194|tradfi|ALTIN_ONS|long": [
+  "TIME"
+ ],
  "1790677194|bist|TUPRS|long": [
   "FILLED",
   "SL"
