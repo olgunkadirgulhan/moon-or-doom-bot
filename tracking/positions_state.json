@@ -63,8 +63,14 @@
  "1790951809|bist|KONTR|short": [
   "EXPIRED"
  ],
- "1790973112|crypto|TAO|long": [],
- "1790973112|crypto|PEPE|long": [],
- "1790973112|crypto|XLM|long": [],
+ "1790973112|crypto|TAO|long": [
+  "EXPIRED"
+ ],
+ "1790973112|crypto|PEPE|long": [
+  "EXPIRED"
+ ],
+ "1790973112|crypto|XLM|long": [
+  "EXPIRED"
+ ],
  "1791002136|crypto|UNI|long": []
 }
