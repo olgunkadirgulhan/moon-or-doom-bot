@@ -48,11 +48,21 @@
  "1790779620|bist|ALTNY|short": [
   "EXPIRED"
  ],
- "1790951809|bist|GSRAY|short": [],
- "1790951809|bist|YEOTK|long": [],
- "1790951809|bist|CLEBI|short": [],
- "1790951809|bist|CANTE|short": [],
- "1790951809|bist|KONTR|short": [],
+ "1790951809|bist|GSRAY|short": [
+  "EXPIRED"
+ ],
+ "1790951809|bist|YEOTK|long": [
+  "EXPIRED"
+ ],
+ "1790951809|bist|CLEBI|short": [
+  "EXPIRED"
+ ],
+ "1790951809|bist|CANTE|short": [
+  "EXPIRED"
+ ],
+ "1790951809|bist|KONTR|short": [
+  "EXPIRED"
+ ],
  "1790973112|crypto|TAO|long": [],
  "1790973112|crypto|PEPE|long": [],
  "1790973112|crypto|XLM|long": []
