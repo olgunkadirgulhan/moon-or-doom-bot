@@ -9,12 +9,14 @@ on:
     # Her gün 17:00 UTC → İstanbul 20:00: günlük sonuç (+ cumartesi haftalık, ayın son günü aylık).
     # Tek zamanlama: aynı anda birden çok çalışma kuyruğa girip birbirini iptal etmesin.
     - cron: "0 17 * * *"
+    # Her gün 00:10 UTC (günlük mum kapandıktan sonra) → Trend Kırılımı sinyalleri + iz süren stoplar
+    - cron: "10 0 * * *"
   workflow_dispatch:
     inputs:
       mode:
         description: "report = rapor · monitor = işlem takibi · results = bugünün sonuçları · daily/weekly/monthly = tek sonuç"
         type: choice
-        options: [report, monitor, results, daily, weekly, monthly]
+        options: [report, monitor, results, trend, daily, weekly, monthly]
         default: report
 
 permissions:
@@ -33,6 +35,7 @@ jobs:
         ${{ github.event.inputs.mode
             || (github.event.schedule == '0 17 * * *' && 'results')
             || (github.event.schedule == '0 2-22/4 * * *' && 'monitor')
+            || (github.event.schedule == '10 0 * * *' && 'trend')
             || 'report' }}
     steps:
       - uses: actions/checkout@v4

@@ -191,3 +191,32 @@ class LevelsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrendTest(unittest.TestCase):
+    """Trend Kırılımı: kapanmış mumlarla 20 günlük zirve kırılımı + avize stop."""
+
+    def _frames(self, closes, vols):
+        import pandas as pd
+        from core.indicators import add_indicators
+        idx = pd.date_range("2024-01-01", periods=len(closes), freq="D", tz="UTC")
+        df = pd.DataFrame({"Open": closes, "High": [c * 1.01 for c in closes], "Low": [c * 0.99 for c in closes],
+                           "Close": closes, "Volume": vols}, index=idx)
+        d1 = add_indicators(df)
+        return {"1d": d1, "4h": d1}
+
+    def test_breakout_long_and_trail(self):
+        import numpy as np
+        from core import trend
+        closes = [100 + 0.05 * i for i in range(260)] + [120.0]
+        vols = [1000.0] * 260 + [5000.0]
+        f = self._frames(closes, vols)
+        btc = (f["1d"].index.as_unit("s").asi8 + 86400, np.ones(len(closes), dtype=int))
+        ps = trend.plans("X", f, btc, families=("breakout",))
+        self.assertEqual(len(ps), 1)
+        p = ps[0]
+        self.assertEqual(p["side"], "long")
+        self.assertLess(p["sl"], p["entry"])
+        # BTC düşüş trendindeyse long kırılım yok
+        btc_down = (btc[0], -np.ones(len(closes), dtype=int))
+        self.assertEqual(trend.plans("X", f, btc_down, families=("breakout",)), [])

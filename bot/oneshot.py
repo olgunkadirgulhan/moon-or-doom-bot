@@ -1,5 +1,5 @@
 """Tek seferlik iş, sonra çık. GitHub Actions için:
-`python -m bot.oneshot report|monitor|results|daily|weekly|monthly`
+`python -m bot.oneshot report|monitor|results|trend|daily|weekly|monthly`
 results: bugün gereken tüm sonuçlar (günlük + cumartesi haftalık + ay sonu aylık).
 """
 import asyncio
@@ -14,7 +14,7 @@ load_dotenv()
 from telegram import Bot  # noqa: E402
 
 from bot.auth import allowed_chat_id  # noqa: E402
-from bot import monitor  # noqa: E402
+from bot import monitor, trend_job  # noqa: E402
 from bot.report import send_report, send_result  # noqa: E402
 from core import data, settings, tracker  # noqa: E402
 
@@ -29,7 +29,10 @@ async def main(mode: str) -> None:
         sys.exit("TELEGRAM_BOT_TOKEN ve ALLOWED_CHAT_ID gerekli.")
     try:
         async with Bot(token) as bot:
-            if mode == "monitor":
+            if mode == "trend":
+                # günlük kapanıştan sonra: trend kırılımı sinyalleri + açık trend pozisyonlarının stopları
+                await trend_job.run(bot, chat_id)
+            elif mode == "monitor":
                 # raporlar arası: sadece işlem olayları (doldu, TP1, stop, süre) — tarama yok
                 await monitor.check(bot, chat_id, settings.all_settings())
             elif mode == "results":
