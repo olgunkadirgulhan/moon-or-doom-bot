@@ -1,4 +1,4 @@
-﻿"""Tarama sonucunu Telegram'a gönderme: özet tablo + 10'arlı grafik albümleri."""
+"""Tarama sonucunu Telegram'a gönderme: özet tablo + 10'arlı grafik albümleri."""
 import asyncio
 import html
 import logging
@@ -86,6 +86,9 @@ async def send_report(bot: Bot, chat_id: int, title: str = "Sinyal Özeti") -> N
     except Exception:  # noqa: BLE001 — pano hatası raporu durdurmasın
         log.exception("piyasa panosu hatası")
     if cands:
+        # fırsatlar da piyasa piyasa: önce kripto, sonra BIST, sonra altın/gümüş
+        order = [g for g, _ in market_map.GROUPS]
+        cands = sorted(cands, key=lambda c: order.index(market_map.group_of(c)))
         await send_candidates(bot, chat_id, cands, cfg, regs)
     if failed or t_failed:
         log.warning("veri alınamadı: %s", failed + t_failed)
@@ -232,8 +235,14 @@ async def send_candidates(bot: Bot, chat_id: int, cands: list[dict], cfg: dict, 
             f"hangisine gireceğine sen karar ver (önerimiz aynı anda en fazla {cfg['max_open']} işlem).\n"
             "Rakamların üstüne dokununca kopyalanır.")
     chunks, cur = [], head
+    labels = dict(market_map.GROUPS)
+    prev = None
     for i, r in enumerate(cands, 1):
         block = candidate_text(i, r, cfg)
+        grp = market_map.group_of(r)
+        if grp != prev:
+            block = f"<b>— {labels[grp]} —</b>\n" + block
+            prev = grp
         if len(cur) + len(block) + 2 > 3800:
             chunks.append(cur)
             cur = block
@@ -263,4 +272,9 @@ async def send_result(bot: Bot, chat_id: int, period: str) -> None:
             f"○ {o['open']} açık. Doğruluk {acc}\n"
             f"💼 Sanal hesap (başlangıçtan beri): {a['equity']:,.0f} $ · {a['trades']} işlem · beklenti {exp} · "
             f"en büyük düşüş %{a['max_dd']:.1f}".replace(",", "."))
+    for m, label in (("crypto", "₿ Kripto"), ("bist", "🏛 BIST hisse"), ("tradfi", "🥇 Altın/Gümüş/Endeks")):
+        s = summary["by_market"].get(m)
+        if s and s["total"]:
+            acc_m = "—" if s["accuracy"] is None else f"%{s['accuracy']:.0f}"
+            note += f"\n{label}: {s['total']} tahmin · ✓ {s['tp']} ✗ {s['sl']} · doğruluk {acc_m}"
     await bot.send_photo(chat_id, png, caption=note, write_timeout=SEND_TIMEOUT)

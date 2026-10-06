@@ -1,11 +1,11 @@
-﻿"""Piyasa haritası: önemli varlıklar için destek/direnç bölgeleri, hazır işlem planı ve "neden şu an işlem yok".
+"""Piyasa haritası: önemli varlıklar için destek/direnç bölgeleri, hazır işlem planı ve "neden şu an işlem yok".
 
 Aday olmasa bile kullanıcı "nerede alınır, nerede satılır" sorusunun cevabını görsün diye her raporda gönderilir.
 """
 import asyncio
 import html
 
-from telegram import Bot
+from telegram import Bot, InputMediaPhoto
 from telegram.constants import ParseMode
 
 from core import chart, signal, strategy
@@ -140,7 +140,7 @@ def board_rows(items: list[dict], cfg: dict, regs: dict, cand_keys: set, active_
 async def send_board(bot: Bot, chat_id: int, cfg: dict, regs: dict, crypto_all: dict, fixed: list[dict],
                      ranked: dict[str, list[dict]], cands: list[dict], active: list[dict], with_charts: bool,
                      send_timeout: int = 120) -> None:
-    """Tek resim: ALIŞ bölümü sonra SATIŞ bölümü (fırsatlar en üstte, sonra güce göre)."""
+    """Piyasa başına bir pano (kripto, BIST, altın/gümüş): ALIŞ sonra SATIŞ bölümü, fırsatlar en üstte."""
     cand_keys = {(c.get("market"), c["symbol"]) for c in cands}
     active_keys = {(p["market"], p["symbol"]) for p in active}
     picked: dict[tuple, dict] = {}
@@ -158,31 +158,58 @@ async def send_board(bot: Bot, chat_id: int, cfg: dict, regs: dict, crypto_all: 
         for r in ranked.get(name, [])[:n]:
             add(r)
 
-    def order(side):
-        rows = [r for r in picked.values() if r["side"] == side]
-        strength = (lambda r: -r["score"]) if side == "long" else (lambda r: r["score"])
-        return sorted(rows, key=lambda r: ((r.get("market"), r["symbol"]) not in cand_keys, strength(r)))
+    # her piyasa kendi içinde: kendi panosu + hemen ardından kendi grafikleri (albüm)
+    for grp, label in GROUPS:
+        items = [r for r in picked.values() if group_of(r) == grp]
+        if not items:
+            continue
 
-    sections = [("▲ ALIŞ (long) — fiyat yükselirse kazanır · en güçlüsü üstte",
-                 board_rows(order("long"), cfg, regs, cand_keys, active_keys)),
-                ("▼ SATIŞ (short) — fiyat düşerse kazanır · en güçlüsü üstte",
-                 board_rows(order("short"), cfg, regs, cand_keys, active_keys))]
-    png = await asyncio.to_thread(chart.board, sections, "Moon or Doom — Piyasa Panosu")
-    regime_line = " · ".join(f"{n} {t}" for k, n in (("crypto", "BTC"), ("bist", "BIST100")) if (t := {
-        "up": "📈 yükselişte", "down": "📉 düşüşte", "neutral": "↔️ yatay"}.get(regs.get(k))))
-    await bot.send_photo(chat_id, png, write_timeout=send_timeout,
-                         caption=f"🗺️ Piyasa panosu · {regime_line}\n"
-                                 f"Yeşil satırlar kurallara uyan fırsatlar; ayrıntılı rakamlar ayrı mesajda.")
-    if with_charts:
+        def order(side):
+            rows = [r for r in items if r["side"] == side]
+            strength = (lambda r: -r["score"]) if side == "long" else (lambda r: r["score"])
+            return sorted(rows, key=lambda r: ((r.get("market"), r["symbol"]) not in cand_keys, strength(r)))
+
+        sections = [("▲ ALIŞ (long) — fiyat yükselirse kazanır · en güçlüsü üstte",
+                     board_rows(order("long"), cfg, regs, cand_keys, active_keys)),
+                    ("▼ SATIŞ (short) — fiyat düşerse kazanır · en güçlüsü üstte",
+                     board_rows(order("short"), cfg, regs, cand_keys, active_keys))]
+        png = await asyncio.to_thread(chart.board, sections, f"Moon or Doom — {label} Panosu")
+        reg = {"crypto": ("crypto", "BTC"), "bist": ("bist", "BIST100")}.get(grp)
+        trend = {"up": "📈 yükselişte", "down": "📉 düşüşte", "neutral": "↔️ yatay"}.get(regs.get(reg[0])) if reg else None
+        await bot.send_photo(chat_id, png, write_timeout=send_timeout,
+                             caption=f"🗺️ {label} panosu" + (f" · {reg[1]} {trend}" if trend else "") +
+                                     "\nYeşil satırlar kurallara uyan fırsatlar; ayrıntılı rakamlar ayrı mesajda.")
+        if not with_charts:
+            continue
+        media = []
         for k in cfg["key_assets"]:
             a = find(k, crypto_all, fixed)
-            if not a:
+            if not a or group_of(a) != grp:
                 continue
             r = signal.with_side(a, plan_side(a, regs), cfg)
-            png = await asyncio.to_thread(chart.coin_chart, {**r, "symbol": a.get("name") or a["symbol"]})
-            await bot.send_photo(chat_id, png, write_timeout=send_timeout,
-                                 caption=f"{a.get('name') or a['symbol']}: yeşil çizgiler destek, kırmızılar direnç; "
-                                         "kesikli çizgiler plan (mavi = emir, kırmızı = zarar-kes, yeşil = hedefler).")
+            media.append(await asyncio.to_thread(chart.coin_chart, {**r, "symbol": a.get("name") or a["symbol"]}))
+        if not media:
+            continue
+        # albümde tek açıklama: birden çok açıklama olunca Telegram sohbette hiçbirini göstermiyor
+        note = (f"📈 {label} grafikleri: yeşil çizgiler destek, kırmızılar direnç; kesikli çizgiler plan "
+                "(mavi = emir, kırmızı = zarar-kes, yeşil = hedefler).")
+        if len(media) == 1:
+            await bot.send_photo(chat_id, media[0], caption=note, write_timeout=send_timeout)
+        else:
+            await bot.send_media_group(chat_id, [InputMediaPhoto(m, caption=note if i == 0 else None)
+                                                 for i, m in enumerate(media)], write_timeout=send_timeout)
+
+
+GROUPS = [("crypto", "₿ Kripto"), ("bist", "🏛 BIST"), ("metal", "🥇 Altın · Gümüş")]
+
+
+def group_of(r: dict) -> str:
+    """Telegram'da ayrı gönderilen piyasa grubu: kripto, BIST (hisseler + BIST 100/30 endeksi), altın/gümüş."""
+    if r.get("market") == "crypto":
+        return "crypto"
+    if r.get("market") == "bist" or r["symbol"].startswith("BIST"):
+        return "bist"
+    return "metal"
 
 
 def find(key: str, crypto: dict, fixed: list[dict]) -> dict | None:
