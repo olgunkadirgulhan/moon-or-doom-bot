@@ -1,0 +1,15 @@
+name: okx-check
+# Tek seferlik: GitHub sunucusundan OKX erişimi (bölge engeli var mı)
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          curl -s -m 15 ipinfo.io/country; echo
+          for h in www.okx.com tr.okx.com eea.okx.com; do
+            echo "== $h"
+            curl -s -m 15 -w " [%{http_code}]\n" "https://$h/api/v5/public/time"
+            curl -s -m 15 -w " [%{http_code}]\n" "https://$h/api/v5/account/balance"
+          done
