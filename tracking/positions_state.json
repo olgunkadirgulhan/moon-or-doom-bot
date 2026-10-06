@@ -75,7 +75,9 @@
  "1791002136|crypto|UNI|long": [
   "EXPIRED"
  ],
- "1791033105|crypto|NEAR|long": [],
+ "1791033105|crypto|NEAR|long": [
+  "TP1"
+ ],
  "1791054449|crypto|LINK|long": [
   "EXPIRED"
  ],
