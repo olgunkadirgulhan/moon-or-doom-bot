@@ -83,11 +83,14 @@ async def run(bot, chat_id: int) -> None:
             r = (exit_px - p["entry"]) / (p["entry"] - p["initial_stop"])
             closed.append({"symbol": p["symbol"], "entry_ts": p["entry_ts"], "exit_ts": now, "entry": p["entry"],
                            "exit": exit_px, "initial_stop": p["initial_stop"], "r": round(r, 2), "reason": reason})
-            msgs.append(f"{'✅' if r > 0 else '❌'} <b>{p['symbol']}</b> kapandı ({reason}): {r:+.2f}R")
+            usd = r * float(settings.get("capital_usd")) * RISK_PCT / 100
+            msgs.append(f"🔴 <b>SAT: {p['symbol']}</b> ({'stop' if reason == 'stop' else '30 gün doldu'})\n"
+                        f"Sonuç: {'kâr' if r > 0 else 'zarar'} {usd:+,.0f}$ ({r:+.1f}R)")
         else:
             if p["stop"] > p.get("notified_stop", p["initial_stop"]) * 1.001:
-                msgs.append(f"🔼 <b>{p['symbol']}</b> stopu yükselt: {_fmt(p['stop'])} "
-                            f"({100 * (p['stop'] / p['entry'] - 1):+.1f}% girişe göre)")
+                safe = p["stop"] >= p["entry"]
+                msgs.append(f"⬆️ <b>{p['symbol']}</b>: stop emrini <b>{_fmt(p['stop'])}</b> yap"
+                            + (" (artık zarar etmez)" if safe else ""))
                 p["notified_stop"] = p["stop"]
             still.append(p)
     state["open"] = still
@@ -121,21 +124,21 @@ async def run(bot, chat_id: int) -> None:
         size = cap * RISK_PCT / 100 / (close - stop) * close
         state["open"].append({"symbol": s, "entry": close, "initial_stop": stop, "stop": stop, "best": close,
                               "entry_ts": now, "last_day": day, "notified_stop": stop})
-        msgs.append(f"🚀 <b>{s} — Trend Kırılımı (AL)</b>\n"
-                    f"Giriş ~{_fmt(close)} · Stop {_fmt(stop)} ({100 * (stop / close - 1):.1f}%)\n"
-                    f"Sıkışmadan çıkış (volatilite 120 günün %{100 * sq:.0f}'lik diliminde) · "
-                    f"hacim 20g ort. {strength:.1f}×\nHedef yok: stop her gün "
-                    f"en yüksek kapanış − 3 ATR'ye çekilir\n"
-                    f"Risk %{RISK_PCT:g} → pozisyon ≈ {size:,.0f}$ ({cap:,.0f}$ sermayede)")
+        msgs.append(f"🟢 <b>AL: {s}</b>\n"
+                    f"Fiyat: ~{_fmt(close)}\n"
+                    f"Miktar: <b>{size:,.0f}$</b>\n"
+                    f"Stop emri: <b>{_fmt(stop)}</b> ({100 * (stop / close - 1):.0f}%)\n"
+                    f"Kâr hedefi yok; stopu her gün ben söyleyeceğim. En kötü durumda kayıp ≈ "
+                    f"{cap * RISK_PCT / 100:,.0f}$")
     if not btc_up:
-        msgs.append("⏸ BTC günlük düşüş trendinde: yeni trend kırılımı sinyali yok.")
+        msgs.append("⏸ BTC düşüşte: bugün yeni alım yok.")
     elif slots <= 0 and cands:
-        msgs.append(f"ℹ️ {len(cands)} kırılım var ama {MAX_OPEN} açık pozisyon dolu.")
+        msgs.append(f"ℹ️ {len(cands)} fırsat daha var ama {MAX_OPEN} pozisyon dolu, yenisini açma.")
 
     _record(closed)
     _save(state)
     if msgs:
-        head = (f"📈 <b>Trend Kırılımı</b> · açık {len(state['open'])}/{MAX_OPEN}\n"
-                "<i>Backtest: tracking/research_trend.md · Yatırım tavsiyesi değildir.</i>\n\n")
+        head = (f"📈 <b>Günlük işlem planı</b> · açık pozisyon {len(state['open'])}/{MAX_OPEN}\n"
+                "<i>Yatırım tavsiyesi değildir.</i>\n\n")
         await bot.send_message(chat_id, head + "\n\n".join(msgs), parse_mode=ParseMode.HTML)
     log.info("trend: %d mesaj, %d açık, %d kapandı", len(msgs), len(state["open"]), len(closed))
