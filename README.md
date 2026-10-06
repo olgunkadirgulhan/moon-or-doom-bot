@@ -29,7 +29,7 @@ copy .env.example .env   # sonra .env'i doldur
 | `/coin ETH` | Tek coin grafik + bileşen detayı + balina transferleri |
 | `/list` | İzleme listesi |
 | `/watch add PEPE` · `/watch rm PEPE` | Listeyi düzenle |
-| `/settings` · `/settings min_rr 2` | Ayarları gör / değiştir |
+| `/settings` · `/settings min_rr 2` | Ayarları gör / değiştir (ör. `/settings candidate_markets crypto,bist`, `/settings candidate_sides long,short`) |
 
 Ayar anahtarları: `buy_threshold`, `sell_threshold`, `min_rr`, `rr_penalty`,
 `report_hours` (ör. `0,6,12,18`, en az 4), `top_n` (≥10), `universe_size`,

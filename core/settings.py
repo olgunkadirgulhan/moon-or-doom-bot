@@ -25,6 +25,10 @@ DEFAULTS = {
     "calc_url": "https://olgunkadirgulhan.github.io/moon-or-doom-calc/",
     "min_volume_usd": 20_000_000,  # likidite filtresi (kripto evreni)
     "regime_filter": True,  # BTC / BIST100 günlük trendine karşı işlem adayı yok
+    # 06.10.2026 sadece kripto long aday: canlıda BIST −0.14R, altın/endeks −0.37R, kripto short −0.11R; trend
+    # araştırmasında short aileleri testte ~0. Diğerleri kaydedilmeye devam eder (tracking), kanıt gelirse açılır.
+    "candidate_markets": ["crypto"],
+    "candidate_sides": ["long"],
     "entry_mode": "limit",  # limit = en yakın güçlü seviyede 12 saat bekle (backtest'te tutarlı), market = güncel fiyat
     "result_hour": 20,
     "top_n": 10,
@@ -65,7 +69,11 @@ def _parse(default, raw: str):
     if isinstance(default, str):
         return raw
     if isinstance(default, list):
-        return sorted({int(x) for x in raw.replace(" ", "").split(",") if x})
+        items = [x for x in raw.replace(" ", "").split(",") if x]
+        if default and isinstance(default[0], str):  # ör. candidate_markets crypto,bist
+            return list(dict.fromkeys(x.lower() if x.isalpha() and x.lower() in ("crypto", "bist", "tradfi", "long",
+                                                                                "short") else x for x in items))
+        return sorted({int(x) for x in items})
     raise ValueError("desteklenmeyen tip")
 
 

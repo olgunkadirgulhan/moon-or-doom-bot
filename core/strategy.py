@@ -46,6 +46,10 @@ def rejection(r: dict, cfg: dict, regimes: dict | None = None, check_session: bo
     liq_pct = 100 * LIQ_BUFFER / cfg["leverage"]
     if r["signal"] == "BEKLE":
         return "BEKLE"
+    if r.get("market", "crypto") not in cfg.get("candidate_markets", ["crypto", "bist", "tradfi"]):
+        return "piyasa aday dışı (sadece kripto)"
+    if r["side"] not in cfg.get("candidate_sides", ["long", "short"]):
+        return "yön aday dışı (sadece long)"
     if r["rr"] < cfg["cand_min_rr"]:
         return "R:R düşük"
     if stop_pct(r) > liq_pct / 2:
