@@ -33,7 +33,14 @@ def _asof(index_end: np.ndarray, values: np.ndarray, T: int, default=0):
     return values[k] if k >= 0 else default
 
 
-BREAKOUT = {"lookback": 20, "vol_mult": 1.3, "atr_stop": 2.0, "trail_k": 3.0}
+# squeeze_max: kırılımdan önceki gün ATR/fiyat, son 120 günün yüzdelik sırasında bu değerin altında olmalı
+# (sıkışmadan çıkan kırılım). Backtest 06.10.2026: 0.3–0.7 arası her eşik eğitim+testte tabandan iyi; 0.5 orta nokta.
+BREAKOUT = {"lookback": 20, "vol_mult": 1.3, "atr_stop": 2.0, "trail_k": 3.0, "squeeze_max": 0.5}
+
+
+def squeeze_rank(d1: pd.DataFrame, window: int = 120) -> np.ndarray:
+    """ATR/fiyatın son `window` gün içindeki yüzdelik sırası (0 = en sıkışık, 1 = en geniş)."""
+    return (d1["atr14"] / d1["Close"]).rolling(window).rank(pct=True).to_numpy()
 
 
 def plans(symbol: str, frames: dict, btc_trend: tuple[np.ndarray, np.ndarray], families=FAMILIES,
@@ -82,6 +89,7 @@ def plans(symbol: str, frames: dict, btc_trend: tuple[np.ndarray, np.ndarray], f
         c, hi, lo = d1["Close"].to_numpy(), d1["High"].to_numpy(), d1["Low"].to_numpy()
         vol, vma = d1["Volume"].to_numpy(), d1["vol_ma20"].to_numpy()
         atr, e200 = d1["atr14"].to_numpy(), d1["ema200"].to_numpy()
+        sq = squeeze_rank(d1)
         for i in range(201, len(d1)):
             T = d1_end[i]
             if T < start_ts or np.isnan(atr[i]) or np.isnan(vma[i]):
@@ -92,7 +100,8 @@ def plans(symbol: str, frames: dict, btc_trend: tuple[np.ndarray, np.ndarray], f
                 continue
             hh, ll = hi[i - n:i].max(), lo[i - n:i].min()
             loud = vol[i] > bo["vol_mult"] * vma[i]
-            if "breakout" in families and c[i] > hh and loud and c[i] > e200[i] and btc != -1:
+            tight = bo["squeeze_max"] is None or (sq[i - 1] == sq[i - 1] and sq[i - 1] < bo["squeeze_max"])
+            if "breakout" in families and c[i] > hh and loud and c[i] > e200[i] and btc != -1 and tight:
                 add("breakout", "long", T, c[i], c[i] - bo["atr_stop"] * atr[i], atr[i], 2.0, 4.0, "trail", 24 * 30,
                     bo["trail_k"])
             if "breakdown" in families and c[i] < ll and loud and c[i] < e200[i] and btc == -1:

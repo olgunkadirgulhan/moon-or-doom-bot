@@ -38,7 +38,7 @@ Ayar anahtarları: `buy_threshold`, `sell_threshold`, `min_rr`, `rr_penalty`,
 Otomatik rapor: her gün 00:00, 06:00, 12:00, 18:00 (İstanbul) — tablo + listedeki tüm coinlerin grafikleri.
 
 **Trend Kırılımı** (ayrı strateji, `bot/trend_job.py`, her gün 03:10 İstanbul): günlük kapanış 20 günlük zirveyi
-hacimle (1.3×) kırar, fiyat EMA200 üstünde, BTC düşüş trendinde değil → AL. Stop 2 ATR, sonra her gün
+hacimle (1.3×) kırar, fiyat EMA200 üstünde, BTC düşüş trendinde değil, öncesinde volatilite sıkışmış (120 günün alt yarısı) → AL. Stop 2 ATR, sonra her gün
 "en yüksek kapanış − 3 ATR" avize stop; sabit hedef yok, en fazla 30 gün. %0.5 risk, max 6 açık.
 Backtest (eğitim + dokunulmamış test, dayanıklılık): `tracking/research_trend.md`. Canlı: `tracking/trend_results.csv`.
 

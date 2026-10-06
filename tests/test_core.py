@@ -212,11 +212,11 @@ class TrendTest(unittest.TestCase):
         vols = [1000.0] * 260 + [5000.0]
         f = self._frames(closes, vols)
         btc = (f["1d"].index.as_unit("s").asi8 + 86400, np.ones(len(closes), dtype=int))
-        ps = trend.plans("X", f, btc, families=("breakout",))
+        ps = trend.plans("X", f, btc, families=("breakout",), bo={"squeeze_max": None})
         self.assertEqual(len(ps), 1)
         p = ps[0]
         self.assertEqual(p["side"], "long")
         self.assertLess(p["sl"], p["entry"])
         # BTC düşüş trendindeyse long kırılım yok
         btc_down = (btc[0], -np.ones(len(closes), dtype=int))
-        self.assertEqual(trend.plans("X", f, btc_down, families=("breakout",)), [])
+        self.assertEqual(trend.plans("X", f, btc_down, families=("breakout",), bo={"squeeze_max": None}), [])

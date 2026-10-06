@@ -1,7 +1,8 @@
 """Trend Kırılımı stratejisi — günlük kapanıştan sonra bir kez çalışır (`python -m bot.oneshot trend`).
 
 Kural (core/trend.py, backtest: tracking/research_trend.md):
-  GİRİŞ  günlük kapanış > önceki 20 günün en yükseği, hacim > 1.3 × 20g ort., fiyat > EMA200, BTC düşüş trendinde değil
+  GİRİŞ  günlük kapanış > önceki 20 günün en yükseği, hacim > 1.3 × 20g ort., fiyat > EMA200, BTC düşüş trendinde değil,
+         önceki gün volatilite (ATR/fiyat) son 120 günün alt yarısında (sıkışmadan çıkan kırılım)
   STOP   giriş − 2 × ATR(14, günlük)
   ÇIKIŞ  avize stop: her günlük kapanışta stop = max(stop, en yüksek kapanış − 3 × ATR); en fazla 30 gün
   RİSK   işlem başına sermayenin %0.5'i, en fazla 6 açık pozisyon (sinyaller aynı günlerde kümelenir)
@@ -109,10 +110,12 @@ async def run(bot, chat_id: int) -> None:
             n = trend.BREAKOUT["lookback"]
             if np.isnan(atr) or np.isnan(vma[-1]):
                 continue
-            if c[-1] > hi[-n - 1:-1].max() and vol[-1] > trend.BREAKOUT["vol_mult"] * vma[-1] and c[-1] > e200:
-                cands.append((vol[-1] / vma[-1], s, float(c[-1]), atr, int(d1.index.as_unit("s").asi8[-1])))
+            sq = trend.squeeze_rank(d1)[-2]  # kırılımdan önceki gün
+            if c[-1] > hi[-n - 1:-1].max() and vol[-1] > trend.BREAKOUT["vol_mult"] * vma[-1] and c[-1] > e200 \
+                    and sq == sq and sq < trend.BREAKOUT["squeeze_max"]:
+                cands.append((1 - sq, s, float(c[-1]), atr, int(d1.index.as_unit("s").asi8[-1]), vol[-1] / vma[-1], sq))
     slots = MAX_OPEN - len(state["open"])
-    for strength, s, close, atr, day in sorted(cands, reverse=True)[:max(0, slots)]:
+    for _rank, s, close, atr, day, strength, sq in sorted(cands, reverse=True)[:max(0, slots)]:
         stop = close - trend.BREAKOUT["atr_stop"] * atr
         cap = float(settings.get("capital_usd"))
         size = cap * RISK_PCT / 100 / (close - stop) * close
@@ -120,7 +123,8 @@ async def run(bot, chat_id: int) -> None:
                               "entry_ts": now, "last_day": day, "notified_stop": stop})
         msgs.append(f"🚀 <b>{s} — Trend Kırılımı (AL)</b>\n"
                     f"Giriş ~{_fmt(close)} · Stop {_fmt(stop)} ({100 * (stop / close - 1):.1f}%)\n"
-                    f"Hacim 20g ortalamanın {strength:.1f} katı · Hedef yok: stop her gün "
+                    f"Sıkışmadan çıkış (volatilite 120 günün %{100 * sq:.0f}'lik diliminde) · "
+                    f"hacim 20g ort. {strength:.1f}×\nHedef yok: stop her gün "
                     f"en yüksek kapanış − 3 ATR'ye çekilir\n"
                     f"Risk %{RISK_PCT:g} → pozisyon ≈ {size:,.0f}$ ({cap:,.0f}$ sermayede)")
     if not btc_up:
