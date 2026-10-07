@@ -118,5 +118,11 @@
  "1791284900|bist|GOLTS|short": [
   "EXPIRED"
  ],
- "1791310141|crypto|UNI|long": []
+ "1791310141|crypto|UNI|long": [
+  "EXPIRED"
+ ],
+ "1791349791|crypto|LINK|long": [],
+ "1791349791|crypto|ETH|long": [],
+ "1791349791|crypto|AAVE|long": [],
+ "1791349791|crypto|PEPE|long": []
 }
