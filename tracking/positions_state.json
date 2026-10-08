@@ -133,9 +133,17 @@
  "1791349791|crypto|PEPE|long": [
   "EXPIRED"
  ],
- "1791386539|crypto|UNI|long": [],
- "1791386539|crypto|BTC|long": [],
- "1791386539|crypto|XRP|long": [],
- "1791386539|crypto|TAO|long": [],
+ "1791386539|crypto|UNI|long": [
+  "EXPIRED"
+ ],
+ "1791386539|crypto|BTC|long": [
+  "EXPIRED"
+ ],
+ "1791386539|crypto|XRP|long": [
+  "EXPIRED"
+ ],
+ "1791386539|crypto|TAO|long": [
+  "EXPIRED"
+ ],
  "1791407275|crypto|ETH|long": []
 }
