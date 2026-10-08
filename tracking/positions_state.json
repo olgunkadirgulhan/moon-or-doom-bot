@@ -148,13 +148,19 @@
  "1791407275|crypto|ETH|long": [
   "EXPIRED"
  ],
- "1791436806|crypto|UNI|long": [],
- "1791436806|crypto|AAVE|long": [],
+ "1791436806|crypto|UNI|long": [
+  "EXPIRED"
+ ],
+ "1791436806|crypto|AAVE|long": [
+  "EXPIRED"
+ ],
  "1791436806|crypto|XRP|long": [
   "FILLED",
   "SL"
  ],
- "1791436806|crypto|TAO|long": [],
+ "1791436806|crypto|TAO|long": [
+  "EXPIRED"
+ ],
  "1791473105|crypto|BTC|long": [],
  "1791473105|crypto|LTC|long": []
 }
