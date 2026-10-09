@@ -161,8 +161,12 @@
  "1791436806|crypto|TAO|long": [
   "EXPIRED"
  ],
- "1791473105|crypto|BTC|long": [],
- "1791473105|crypto|LTC|long": [],
+ "1791473105|crypto|BTC|long": [
+  "EXPIRED"
+ ],
+ "1791473105|crypto|LTC|long": [
+  "EXPIRED"
+ ],
  "1791493893|crypto|UNI|long": [],
  "1791493893|crypto|AAVE|long": [],
  "1791493893|crypto|BNB|long": []
