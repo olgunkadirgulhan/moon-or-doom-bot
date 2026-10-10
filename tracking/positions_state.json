@@ -197,9 +197,17 @@
  "1791558456|crypto|WLD|long": [
   "EXPIRED"
  ],
- "1791578542|crypto|ETH|long": [],
- "1791578542|crypto|XRP|long": [],
- "1791578542|crypto|SOL|long": [],
- "1791578542|crypto|ZEC|long": [],
+ "1791578542|crypto|ETH|long": [
+  "EXPIRED"
+ ],
+ "1791578542|crypto|XRP|long": [
+  "EXPIRED"
+ ],
+ "1791578542|crypto|SOL|long": [
+  "EXPIRED"
+ ],
+ "1791578542|crypto|ZEC|long": [
+  "EXPIRED"
+ ],
  "1791608846|crypto|SUI|long": []
 }
