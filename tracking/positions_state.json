@@ -188,9 +188,15 @@
  "1791523420|crypto|SOL|long": [
   "EXPIRED"
  ],
- "1791558456|crypto|UNI|long": [],
- "1791558456|crypto|BNB|long": [],
- "1791558456|crypto|WLD|long": [],
+ "1791558456|crypto|UNI|long": [
+  "EXPIRED"
+ ],
+ "1791558456|crypto|BNB|long": [
+  "EXPIRED"
+ ],
+ "1791558456|crypto|WLD|long": [
+  "EXPIRED"
+ ],
  "1791578542|crypto|ETH|long": [],
  "1791578542|crypto|XRP|long": [],
  "1791578542|crypto|SOL|long": [],
