@@ -209,7 +209,9 @@
  "1791578542|crypto|ZEC|long": [
   "EXPIRED"
  ],
- "1791608846|crypto|SUI|long": [],
+ "1791608846|crypto|SUI|long": [
+  "EXPIRED"
+ ],
  "1791642127|crypto|BNB|long": [],
  "1791642127|crypto|SOL|long": []
 }
