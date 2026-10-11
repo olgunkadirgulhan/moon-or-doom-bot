@@ -218,5 +218,10 @@
  "1791642127|crypto|SOL|long": [
   "EXPIRED"
  ],
- "1791662111|crypto|ZEC|long": []
+ "1791662111|crypto|ZEC|long": [
+  "EXPIRED"
+ ],
+ "1791694619|crypto|BNB|long": [],
+ "1791694619|crypto|SOL|long": [],
+ "1791694619|crypto|LINK|long": []
 }
