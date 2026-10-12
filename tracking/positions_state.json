@@ -230,7 +230,13 @@
  "1791694619|crypto|LINK|long": [
   "EXPIRED"
  ],
- "1791749037|crypto|UNI|long": [],
- "1791781898|crypto|FIL|long": [],
- "1791781898|crypto|ONDO|long": []
+ "1791749037|crypto|UNI|long": [
+  "SL"
+ ],
+ "1791781898|crypto|FIL|long": [
+  "EXPIRED"
+ ],
+ "1791781898|crypto|ONDO|long": [
+  "FILLED"
+ ]
 }
