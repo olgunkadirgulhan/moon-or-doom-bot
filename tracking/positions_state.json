@@ -1,29 +1,4 @@
 {
- "1790668352|bist|ANSGR|long": [
-  "TIME"
- ],
- "1790670372|bist|BRSAN|long": [
-  "EXPIRED"
- ],
- "1790670372|bist|ISMEN|short": [
-  "EXPIRED"
- ],
- "1790671132|bist|TSKB|short": [
-  "EXPIRED"
- ],
- "1790677194|tradfi|ALTIN_GR_USD|long": [
-  "TIME"
- ],
- "1790677194|tradfi|ALTIN_ONS|long": [
-  "TIME"
- ],
- "1790677194|bist|TUPRS|long": [
-  "FILLED",
-  "SL"
- ],
- "1790677194|bist|TURSG|short": [
-  "EXPIRED"
- ],
  "1790693097|bist|GUBRF|long": [
   "EXPIRED"
  ],
@@ -244,7 +219,9 @@
   "FILLED",
   "SL"
  ],
- "1791826557|crypto|LINK|long": [],
+ "1791826557|crypto|LINK|long": [
+  "EXPIRED"
+ ],
  "1791826557|crypto|WLD|long": [
   "FILLED"
  ],
