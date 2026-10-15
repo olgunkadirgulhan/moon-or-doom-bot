@@ -229,5 +229,10 @@
  "1792008274|crypto|ETH|long": [
   "FILLED",
   "SL"
- ]
+ ],
+ "1792036584|crypto|UNI|long": [],
+ "1792036584|crypto|LINK|long": [],
+ "1792036584|crypto|AAVE|long": [],
+ "1792036584|crypto|LTC|long": [],
+ "1792036584|crypto|TAO|long": []
 }
