@@ -1,19 +1,4 @@
 {
- "1790951809|bist|GSRAY|short": [
-  "EXPIRED"
- ],
- "1790951809|bist|YEOTK|long": [
-  "EXPIRED"
- ],
- "1790951809|bist|CLEBI|short": [
-  "EXPIRED"
- ],
- "1790951809|bist|CANTE|short": [
-  "EXPIRED"
- ],
- "1790951809|bist|KONTR|short": [
-  "EXPIRED"
- ],
  "1790973112|crypto|TAO|long": [
   "EXPIRED"
  ],
@@ -247,6 +232,8 @@
  "1792054970|crypto|BNB|long": [
   "FILLED"
  ],
- "1792105117|crypto|SUI|long": [],
+ "1792105117|crypto|SUI|long": [
+  "EXPIRED"
+ ],
  "1792122723|crypto|ENA|long": []
 }
