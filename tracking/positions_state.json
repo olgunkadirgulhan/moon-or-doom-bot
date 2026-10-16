@@ -199,7 +199,8 @@
   "EXPIRED"
  ],
  "1791826557|crypto|WLD|long": [
-  "FILLED"
+  "FILLED",
+  "TIME"
  ],
  "1791856556|crypto|BNB|long": [
   "EXPIRED"
