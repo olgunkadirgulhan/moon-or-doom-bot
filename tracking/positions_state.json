@@ -1,7 +1,4 @@
 {
- "1791054449|crypto|LINK|long": [
-  "EXPIRED"
- ],
  "1791067625|crypto|UNI|long": [
   "EXPIRED"
  ],
@@ -228,5 +225,6 @@
  "1792250198|crypto|ETH|long": [
   "FILLED"
  ],
- "1792250198|crypto|SNDKB|long": []
+ "1792250198|crypto|SNDKB|long": [],
+ "1792261120|crypto|AAVE|long": []
 }
