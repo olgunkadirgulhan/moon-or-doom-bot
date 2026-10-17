@@ -1,8 +1,4 @@
 {
- "1791033105|crypto|NEAR|long": [
-  "TIME",
-  "TP1"
- ],
  "1791054449|crypto|LINK|long": [
   "EXPIRED"
  ],
@@ -226,5 +222,7 @@
  "1792122723|crypto|ENA|long": [
   "EXPIRED"
  ],
- "1792190544|crypto|SNDKB|long": []
+ "1792190544|crypto|SNDKB|long": [
+  "EXPIRED"
+ ]
 }
