@@ -224,5 +224,9 @@
  ],
  "1792190544|crypto|SNDKB|long": [
   "EXPIRED"
- ]
+ ],
+ "1792250198|crypto|ETH|long": [
+  "FILLED"
+ ],
+ "1792250198|crypto|SNDKB|long": []
 }
