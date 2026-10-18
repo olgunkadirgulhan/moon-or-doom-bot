@@ -1,7 +1,4 @@
 {
- "1791090350|crypto|ZEC|long": [
-  "EXPIRED"
- ],
  "1791121844|crypto|UNI|long": [
   "EXPIRED"
  ],
@@ -197,7 +194,9 @@
  "1792036584|crypto|UNI|long": [
   "EXPIRED"
  ],
- "1792036584|crypto|LINK|long": [],
+ "1792036584|crypto|LINK|long": [
+  "TIME"
+ ],
  "1792036584|crypto|AAVE|long": [
   "EXPIRED"
  ],
@@ -227,5 +226,7 @@
   "FILLED",
   "SL"
  ],
- "1792261120|crypto|AAVE|long": []
+ "1792261120|crypto|AAVE|long": [
+  "EXPIRED"
+ ]
 }
