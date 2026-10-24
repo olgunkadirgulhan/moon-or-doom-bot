@@ -1,7 +1,4 @@
 {
- "1791662111|crypto|ZEC|long": [
-  "EXPIRED"
- ],
  "1791694619|crypto|BNB|long": [
   "EXPIRED"
  ],
@@ -102,5 +99,6 @@
  ],
  "1792337885|crypto|SUI|long": [
   "EXPIRED"
- ]
+ ],
+ "1792867250|crypto|SNDKB|long": []
 }
