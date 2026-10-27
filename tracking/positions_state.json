@@ -55,12 +55,16 @@
  "1792337885|crypto|SUI|long": [
   "EXPIRED"
  ],
- "1792867250|crypto|SNDKB|long": [],
+ "1792867250|crypto|SNDKB|long": [
+  "TIME"
+ ],
  "1792918971|crypto|AAVE|long": [
   "EXPIRED"
  ],
  "1792987252|crypto|AAVE|long": [
   "SL"
  ],
- "1793074904|crypto|NEAR|long": []
+ "1793074904|crypto|NEAR|long": [
+  "EXPIRED"
+ ]
 }
