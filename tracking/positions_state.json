@@ -35,6 +35,7 @@
   "EXPIRED"
  ],
  "1793250141|crypto|SUI|long": [
-  "FILLED"
+  "FILLED",
+  "SL"
  ]
 }
