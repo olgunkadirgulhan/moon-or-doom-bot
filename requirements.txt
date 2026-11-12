@@ -4,6 +4,7 @@ pandas>=2.2
 numpy>=1.26
 ta>=0.11
 mplfinance>=0.12.10b0
+six>=1.16  # mplfinance bunu kendisi kurmuyor (2026-11-10 kırıldı)
 matplotlib>=3.8
 httpx>=0.27
 APScheduler>=3.10,<4
