@@ -6,9 +6,13 @@
   "SL"
  ],
  "1794571198|crypto|ETH|long": [
-  "FILLED"
+  "FILLED",
+  "SL"
  ],
  "1794571198|crypto|BTC|long": [
   "EXPIRED"
+ ],
+ "1794617310|crypto|BTC|long": [
+  "SL"
  ]
 }
