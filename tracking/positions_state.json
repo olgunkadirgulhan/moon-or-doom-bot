@@ -8,5 +8,7 @@
  "1794571198|crypto|ETH|long": [
   "FILLED"
  ],
- "1794571198|crypto|BTC|long": []
+ "1794571198|crypto|BTC|long": [
+  "EXPIRED"
+ ]
 }
