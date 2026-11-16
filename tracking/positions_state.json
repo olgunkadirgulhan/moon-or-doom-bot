@@ -20,7 +20,9 @@
   "SL"
  ],
  "1794776136|crypto|ETH|long": [],
- "1794776136|crypto|LTC|long": [],
+ "1794776136|crypto|LTC|long": [
+  "SL"
+ ],
  "1794776136|crypto|AVAX|long": [
   "EXPIRED"
  ]
