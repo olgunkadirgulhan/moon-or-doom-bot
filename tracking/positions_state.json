@@ -19,7 +19,9 @@
   "FILLED",
   "SL"
  ],
- "1794776136|crypto|ETH|long": [],
+ "1794776136|crypto|ETH|long": [
+  "SL"
+ ],
  "1794776136|crypto|LTC|long": [
   "SL"
  ],
